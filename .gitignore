@@ -1,0 +1,53 @@
+# Environment files
+.env
+.env.backup
+.env.production
+.env.local
+
+# Node.js / Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+
+# Python / AI Service
+ai-service/__pycache__/
+ai-service/*/__pycache__/
+ai-service/*/*/__pycache__/
+ai-service/.pytest_cache/
+ai-service/.venv/
+ai-service/venv/
+ai-service/env/
+ai-service/*.pyc
+ai-service/*.pyo
+ai-service/*.pyd
+
+# PHP / Laravel Backend
+backend/vendor/
+backend/storage/*.key
+backend/storage/framework/cache/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/logs/*
+backend/bootstrap/cache/*
+!backend/storage/framework/cache/.gitignore
+!backend/storage/framework/sessions/.gitignore
+!backend/storage/framework/views/.gitignore
+!backend/storage/logs/.gitignore
+!backend/bootstrap/cache/.gitignore
+.phpunit.result.cache
+
+# PostgreSQL / Docker Volumes
+.docker-volumes/
+postgres-data/
+
+# IDE / OS Files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+

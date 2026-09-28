@@ -1,0 +1,115 @@
+services:
+  # ==========================================
+  # Database Service (PostgreSQL 16)
+  # ==========================================
+  db:
+    image: postgres:16-alpine
+    container_name: sigap-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-sigap_db}
+      POSTGRES_USER: ${DB_USERNAME:-sigap_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sigap_secret_change_me}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - sigap_pgdata:/var/lib/postgresql/data
+      - ./database/schema:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-sigap_user} -d ${DB_DATABASE:-sigap_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sigap-network
+
+  # ==========================================
+  # Backend Service (Laravel REST API)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        COMPOSER_PROCESS_TIMEOUT: ${COMPOSER_PROCESS_TIMEOUT:-1200}
+    container_name: sigap-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-SIGAP}
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:?Jalankan scripts/setup-env.ps1 untuk menyiapkan APP_KEY lokal}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_DATABASE: ${DB_DATABASE:-sigap_db}
+      DB_USERNAME: ${DB_USERNAME:-sigap_user}
+      DB_PASSWORD: ${DB_PASSWORD:-sigap_secret_change_me}
+      AI_SERVICE_URL: http://ai-service:8001
+      CACHE_STORE: file
+      SESSION_DRIVER: file
+      QUEUE_CONNECTION: sync
+      COMPOSER_PROCESS_TIMEOUT: ${COMPOSER_PROCESS_TIMEOUT:-1200}
+    volumes:
+      - ./backend:/var/www/html
+      # Keep Linux dependencies visible even when the source is bind-mounted.
+      - sigap_vendor:/var/www/html/vendor
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sigap-network
+
+  # ==========================================
+  # AI Service (Python FastAPI)
+  # ==========================================
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: sigap-ai-service
+    restart: unless-stopped
+    ports:
+      - "${AI_SERVICE_PORT:-8001}:8001"
+    environment:
+      APP_ENV: development
+      PORT: 8001
+      LARAVEL_API_URL: http://backend:8000/api
+    volumes:
+      - ./ai-service:/app
+    networks:
+      - sigap-network
+
+  # ==========================================
+  # Frontend Service (Vue 3 + Vite)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sigap-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8000/api
+      - VITE_AI_BASE_URL=http://localhost:8001
+    depends_on:
+      - backend
+      - ai-service
+    networks:
+      - sigap-network
+
+volumes:
+  sigap_pgdata:
+    driver: local
+  sigap_vendor:
+    driver: local
+
+networks:
+  sigap-network:
+    driver: bridge
+
