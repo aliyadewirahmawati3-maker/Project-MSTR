@@ -2,7 +2,7 @@
 
 Prototype Decision Support System (DSS) untuk simpang Jl. Ibrahim Adjie sisi Mall Tenth Avenue, Bandung. SIGAP tidak terhubung ke kontroler lampu lalu lintas atau ATCS fisik.
 
-Tahap 1 mengaktifkan Laravel 12, PostgreSQL 16, dan FastAPI dalam status standby. Frontend Vue/Vite beserta simulator visual tetap terpisah dan belum mengambil konfigurasi dari API.
+Tahap 1 mengaktifkan Laravel 12, PostgreSQL 16, dan FastAPI dalam status standby. Tahap 2 menghubungkan dashboard Vue/Vite ke konfigurasi Laravel API; simulator visual tetap mandiri.
 
 ## Batasan sistem
 
@@ -118,12 +118,28 @@ PHPUnit memakai PostgreSQL sesuai `phpunit.xml`; jalankan setelah migration/seed
 
 ## Tahap 2: frontend mengambil data API
 
-Tahap ini belum dikerjakan. Urutan implementasi selanjutnya:
+Jalankan frontend dari host Windows dengan Node/npm lokal, tanpa service frontend Docker:
 
-1. Pertahankan tiga service di atas dan pastikan `/api/health` melaporkan `database.connected: true`.
-2. Tetapkan `VITE_API_BASE_URL=http://localhost:8000/api` pada environment lokal frontend. Jalankan Vue dari host dengan `cd frontend`, `npm ci` bila dependency belum tersedia, lalu `npm run dev`. Frontend Docker tetap tidak diperlukan.
-3. Buat modul akses API dengan fetch, pemeriksaan HTTP status, timeout, serta state loading/error. Ambil `/intersections`, pilih kode `BDG-IBR-ADJ-01`, dan gunakan ID respons untuk endpoint detail/arah/kamera/status/fase.
-4. Petakan data konfigurasi ke tampilan yang sudah ada tanpa mengganti desain, layout, atau logika simulator. Pisahkan status koneksi API dari kesiapan deteksi AI/CCTV; `UNCONFIGURED`/stream null berarti standby atau menunggu data.
-5. Jika origin Vite memerlukan CORS, verifikasi respons backend dan atur origin development atau proxy Vite `/api`. Uji alur normal, API terputus, data kosong, dan pulih setelah retry.
-6. Jangan menghubungkan nilai simulasi ke tabel pengukuran nyata, menambahkan inferensi/heuristik, atau mengirim kontrol ke ATCS fisik.
+```powershell
+cd frontend
+if (!(Test-Path .env.local)) { Copy-Item .env.example .env.local }
+npm ci
+npm run dev -- --host 127.0.0.1
+```
 
+Buka alamat yang dicetak Vite (default `http://127.0.0.1:3000`). `.env.local` berisi `VITE_API_BASE_URL=http://localhost:8000/api` dan diabaikan Git. `.env.example` merupakan contoh yang dapat dilacak. Nilai `VITE_*` masuk ke bundle browser: gunakan hanya konfigurasi publik, tanpa password/token rahasia. Restart Vite setelah mengubah environment.
+
+Dashboard membaca tujuh endpoint GET pada tabel API di atas. Kode `BDG-IBR-ADJ-01` dipilih dari daftar simpang, kemudian ID respons dipakai untuk detail, arah/lajur, kamera, status sistem, dan fase. Axios yang sudah tersedia memberi timeout 5 detik per request.
+
+Tombol **Refresh Status** mengambil ulang seluruh konfigurasi. Polling health berjalan 15 detik setelah request sebelumnya selesai, tanpa request tumpang tindih; timer dan request dibatalkan saat dashboard ditutup. Jika health gagal, konfigurasi terakhir tetap tersedia, sedangkan mode, fase aktif, AI, dan kamera diberi label standby/belum terverifikasi. Polling berikutnya mencoba memuat ulang konfigurasi agar dapat pulih; refresh manual juga tersedia.
+
+Nama/durasi fase dari API merupakan konfigurasi prototype. Nilai tersebut tidak mengubah timing, geometri, animasi kendaraan, atau lampu simulator lokal. `UNCONFIGURED`, AI/CCTV `false`, dan stream kosong tetap ditampilkan jujur tanpa deteksi atau stream palsu.
+
+Verifikasi (backend lokal perlu aktif untuk tes integrasi):
+
+```powershell
+npm run build
+node --test src/composables/useDashboardConfiguration.test.js src/simulation/intersectionSimulator.test.js
+```
+
+Tes integrasi menggunakan respons Laravel nyata dan menyuntikkan kegagalan hanya pada klien pengujian. Untuk uji browser manual, buka DevTools → Network request blocking, blokir `*localhost:8000/api/*`, lalu klik **Refresh Status**. Pesan offline harus muncul dan simulator tetap dapat dijalankan. Hapus pemblokiran lalu klik refresh untuk memulihkan status online. Tidak perlu mematikan backend atau mengubah database.

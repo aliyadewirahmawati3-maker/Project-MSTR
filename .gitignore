@@ -3,6 +3,7 @@
 .env.backup
 .env.production
 .env.local
+.env.*.local
 
 # Node.js / Frontend
 frontend/node_modules/
@@ -50,4 +51,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-

@@ -18,12 +18,13 @@ const menus = [
   { label: 'Kesehatan Perangkat', icon: 'pulse' },
   { label: 'Pengaturan Simpang', icon: 'settings' },
 ]
-const { configuration, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, dispose } = useDashboardConfiguration()
-const directions = computed(() => (configuration.value?.approaches || []).map(approach => directionLabel(approach.direction)))
-const systemMode = computed(() => configuration.value?.systemStatus?.current_mode || 'Belum tersedia')
-const aiStatus = computed(() => !configuration.value ? 'Tidak diketahui' : configuration.value.systemStatus.is_ai_healthy ? 'Sehat' : 'Standby')
+const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
+const directions = computed(() => configuration.value?.approaches.map(approach => directionLabel(approach.direction)) || Array(4).fill('—'))
+const systemMode = computed(() => configurationFresh.value ? configuration.value.systemStatus.current_mode : 'Standby')
+const aiStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_ai_healthy === true ? 'Sehat' : 'Standby')
+const cctvStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_cctv_healthy === true ? 'Sehat (API)' : 'Standby')
 const serviceStatus = computed(() => refreshing.value ? 'Memuat...' : error.value ? 'Terganggu' : 'Online')
-const activePhase = computed(() => configuration.value?.signalPhases.find(phase => phase.is_active)?.name || 'Belum tersedia')
+const activePhase = computed(() => configurationFresh.value ? configuration.value.signalPhases.find(phase => phase.is_active)?.name || 'Belum tersedia' : 'Belum terverifikasi')
 const search = ref('')
 const searchOpen = ref(false)
 const searchResults = computed(() => menus.filter(menu => `${menu.label} ${menu.keywords || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
@@ -86,7 +87,7 @@ onMounted(() => {
   mobileQuery = window.matchMedia('(max-width: 1000px)')
   syncMobileLayout()
   mobileQuery.addEventListener('change', syncMobileLayout)
-  checkHealth()
+  start()
   document.addEventListener('click', closeOverlays)
   document.addEventListener('keydown', handleEscape)
 })
@@ -148,7 +149,7 @@ onBeforeUnmount(() => {
               <div class="operation-metric"><span class="icon-tile amber"><AppIcon name="pulse" /></span><div><span class="metric-label">Kesehatan layanan</span><strong>{{ serviceStatus }}</strong><span class="metric-note" role="status" aria-live="polite">{{ statusMessage }}</span></div></div>
             </div>
           </section>
-          <section class="card queue-card" aria-labelledby="queue-title"><div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span class="badge badge-neutral">Menunggu data</span></div><div class="queue-metrics"><div v-for="direction in directions" :key="direction" class="queue-metric"><div><span>{{ direction }}</span><strong>—</strong></div><div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment"></i></div><p>Menunggu data CCTV</p></div></div></section>
+          <section class="card queue-card" aria-labelledby="queue-title"><div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span class="badge badge-neutral">Menunggu data</span></div><div class="queue-metrics"><div v-for="(direction, index) in directions" :key="index" class="queue-metric"><div><span>{{ direction }}</span><strong>—</strong></div><div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment"></i></div><p>Menunggu data CCTV</p></div></div></section>
         </div>
 
         <div class="main-grid">
@@ -156,16 +157,16 @@ onBeforeUnmount(() => {
           <div class="decision-column">
             <section id="rekomendasi-ai" class="card recommendation-card" tabindex="-1" aria-labelledby="recommendation-title">
               <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span class="badge badge-neutral">Standby</span></div>
-              <div class="recommendation-content"><dl class="recommendation-metrics"><div><dt>Fase rekomendasi</dt><dd>—</dd></div><div><dt>Skor prioritas</dt><dd>—</dd></div><div><dt>Durasi hijau</dt><dd>—</dd></div></dl><div class="recommendation-reason"><AppIcon name="clock" :size="19" /><div><strong>Menunggu data antrean</strong><p><span class="sr-only">Alasan: </span>Menunggu pengukuran zona antrean dari CCTV.</p></div></div><p class="heuristic-note">Keputusan adaptif diproses dengan logika heuristik pada backend.</p></div>
+              <div class="recommendation-content"><dl class="recommendation-metrics"><div><dt>Fase rekomendasi</dt><dd>—</dd></div><div><dt>Skor prioritas</dt><dd>—</dd></div><div><dt>Durasi hijau</dt><dd>—</dd></div></dl><div class="recommendation-reason"><AppIcon name="clock" :size="19" /><div><strong>Menunggu data antrean</strong><p><span class="sr-only">Alasan: </span>Menunggu pengukuran zona antrean dari CCTV.</p></div></div><p class="heuristic-note">Rekomendasi belum tersedia; menunggu data CCTV.</p></div>
             </section>
             <section class="card integration-card" aria-labelledby="integration-title">
               <div class="card-heading"><div><h2 id="integration-title">Status Integrasi ATCS</h2><p>Alur mode operasional sistem</p></div><AppIcon name="link" class="muted-icon" :size="19" /></div>
-              <div class="integration-content"><ol class="integration-flow" aria-label="SIGAP Adaptive ke Fallback Aman ke ATCS Normal"><li><AppIcon name="spark" :size="19" /><span>SIGAP Adaptive</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li><AppIcon name="shield" :size="19" /><span>Fallback Aman</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'ATCS_NORMAL' }"><AppIcon name="traffic" :size="19" /><span>ATCS Normal</span></li></ol><div class="integration-active"><span><i class="status-dot blue"></i>Status aktif</span><strong>{{ systemMode }} (Simulator)</strong></div><p class="operator-note">Operator Bandung Command Center tetap memantau sistem pada seluruh mode.</p><div class="service-readout"><span>Backend <i class="status-dot" :class="{ green: backendStatus === 'Online' }"></i>{{ backendStatus }}</span><span>Database <i class="status-dot" :class="{ green: databaseStatus === 'Online' }"></i>{{ databaseStatus }}</span><span>Layanan AI <i class="status-dot" :class="{ green: aiStatus === 'Sehat' }"></i>{{ aiStatus }}</span></div></div>
+              <div class="integration-content"><ol class="integration-flow" aria-label="SIGAP Adaptive ke Fallback Aman ke ATCS Normal"><li :class="{ current: systemMode === 'SIGAP_ADAPTIVE' }"><AppIcon name="spark" :size="19" /><span>SIGAP Adaptive</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'FALLBACK_ATCS' }"><AppIcon name="shield" :size="19" /><span>Fallback Aman</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'ATCS_NORMAL' }"><AppIcon name="traffic" :size="19" /><span>ATCS Normal</span></li></ol><div class="integration-active"><span><i class="status-dot blue"></i>Status aktif</span><strong>{{ systemMode }} (Simulator)</strong></div><p class="operator-note">Operator Bandung Command Center tetap memantau sistem pada seluruh mode.</p><div class="service-readout"><span>Backend <i class="status-dot" :class="{ green: backendStatus === 'Online' }"></i>{{ backendStatus }}</span><span>Database <i class="status-dot" :class="{ green: databaseStatus === 'Online' }"></i>{{ databaseStatus }}</span><span>Layanan AI <i class="status-dot" :class="{ green: aiStatus === 'Sehat' }"></i>{{ aiStatus }}</span><span>CCTV <i class="status-dot" :class="{ green: cctvStatus === 'Sehat (API)' }"></i>{{ cctvStatus }}</span></div></div>
             </section>
           </div>
         </div>
 
-        <CctvMonitoring :cameras="configuration?.cameras || []" :approaches="configuration?.approaches || []" />
+        <CctvMonitoring :status-fresh="configurationFresh" :cameras="configuration?.cameras || []" :approaches="configuration?.approaches || []" />
         <footer class="page-footer"><p>SIGAP — Prototype Decision Support System untuk ATCS Bandung Command Center</p><span><i class="status-dot blue"></i>Lingkungan simulator</span></footer>
       </div>
     </main>
