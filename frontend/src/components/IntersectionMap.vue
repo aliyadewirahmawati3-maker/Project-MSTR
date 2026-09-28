@@ -2,6 +2,10 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AppIcon from './AppIcon.vue'
 import SimulationVehicle from './SimulationVehicle.vue'
+import { directionLabel, movementLabel } from '../services/sigapApi.js'
+
+const props = defineProps({ apiApproaches: { type: Array, default: () => [] }, signalPhases: { type: Array, default: () => [] } })
+const laneCounts = computed(() => [...new Set(props.apiApproaches.map(approach => approach.lanes?.length || 0))].join('/'))
 import { colors, flows, motionPaths } from '../simulation/mapGeometry.js'
 import { advanceSimulation, cancelEvp, createSimulation, DENSITIES, DIRECTIONS, LABELS, lightFor, queuedVehicles, requestEvp, setDensity, TIMING } from '../simulation/intersectionSimulator.js'
 
@@ -85,8 +89,8 @@ onBeforeUnmount(() => {
 <template>
   <section id="peta-simpang" class="card map-card" tabindex="-1" aria-labelledby="map-title">
     <div class="card-heading">
-      <div><h2 id="map-title">Peta Persimpangan &amp; Fase Aktif</h2><p>Lajur luar: kiri / lurus · Lajur dalam: lurus / kanan</p></div>
-      <span class="badge badge-neutral"><AppIcon name="map" :size="13" />4 arah · 2 lajur</span>
+      <div><h2 id="map-title">Peta Persimpangan &amp; Fase Aktif</h2><p>Geometri simulator lokal; konfigurasi API di bawah</p></div>
+      <span class="badge badge-neutral"><AppIcon name="map" :size="13" />{{ apiApproaches.length || '—' }} arah · {{ laneCounts || '—' }} lajur</span>
     </div>
     <div class="sim-toolbar">
       <span class="badge simulation-badge">SIMULASI VISUAL · Bukan data CCTV/YOLO</span>
@@ -186,7 +190,11 @@ onBeforeUnmount(() => {
       <div class="phase-lights" aria-label="Status lampu setiap arah"><span v-for="direction in DIRECTIONS" :key="direction"><i :class="['status-dot', lightFor(simulation, direction)]"></i>{{ LABELS[direction] }} {{ phaseNames[lightFor(simulation, direction)] }}</span></div>
       <p class="phase-detail">{{ simulation.phase === 'allRed' && countdown === 0 ? 'Menunggu kendaraan keluar dan jarak aman sebelum hijau berikutnya.' : `Dua lajur mengalir beriringan · Jarak aman antarkendaraan · Hijau ${TIMING.green} dtk / kuning ${TIMING.yellow} dtk / all-red ≥ ${TIMING.allRed} dtk` }}</p>
     </div>
-    <div class="map-footnote"><AppIcon name="info" :size="13" />Warna jalur menunjukkan arah arus, bukan status lampu.</div>
+    <div class="map-footnote"><AppIcon name="info" :size="13" /><div>Warna jalur menunjukkan arah arus, bukan status lampu. Geometri dan animasi tetap simulasi lokal.
+      <p v-for="approach in apiApproaches" :key="approach.id">{{ directionLabel(approach.direction) }} · {{ approach.name }}: <span v-for="(lane, index) in approach.lanes" :key="lane.id">{{ index ? ' · ' : '' }}{{ lane.lane_type === 'outer' ? 'Lajur luar' : lane.lane_type === 'inner' ? 'Lajur dalam' : lane.lane_type }}: {{ movementLabel(lane.movement_rules) }}</span></p>
+      <p v-for="phase in signalPhases" :key="phase.id">Konfigurasi API · {{ phase.name }}: {{ phase.duration?.default_seconds ?? '—' }} dtk (min {{ phase.duration?.min_seconds ?? '—' }}, maks {{ phase.duration?.max_seconds ?? '—' }}, kuning {{ phase.duration?.amber_seconds ?? '—' }}, all-red {{ phase.duration?.all_red_seconds ?? '—' }} dtk).</p>
+      <p>Parameter API belum mengendalikan animasi atau ATCS fisik.</p>
+    </div></div>
     <section class="evp-panel" aria-labelledby="evp-title">
       <div class="evp-heading"><h3 id="evp-title"><AppIcon name="shield" :size="15" />Emergency Vehicle Priority</h3><span class="evp-local">Simulasi lokal</span></div>
       <p class="evp-status" :class="{ 'evp-active': simulation.evp }" role="status">{{ evpStatus }}</p>
