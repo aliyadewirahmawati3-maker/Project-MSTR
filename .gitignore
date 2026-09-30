@@ -7,6 +7,7 @@
 
 # Tahap 3: sumber video, environment alat, dan hasil inspeksi lokal
 *.[mM][pP]4
+/cctv-offline/
 /.venv-stage3/
 /artifacts/stage3/
 /tools/cctv/__pycache__/

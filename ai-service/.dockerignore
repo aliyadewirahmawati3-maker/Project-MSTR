@@ -1,0 +1,9 @@
+.env*
+__pycache__/
+**/__pycache__/
+.venv/
+venv/
+.pytest_cache/
+*.[mM][pP]4
+**/*.[mM][pP]4
+cctv-offline/

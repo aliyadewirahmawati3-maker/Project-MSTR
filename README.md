@@ -12,6 +12,8 @@ Tahap 3.6 menambahkan overlay SVG delapan zona manual pada rekaman lokal. Tombol
 
 Tahap 3.7 memakai tombol **Pilih video lokal** pada setiap kartu. Jalankan `npm.cmd --prefix frontend run dev -- --host 127.0.0.1`, buka `http://127.0.0.1:3000/#live-monitoring`, lalu pilih empat rekaman dari perangkat. Video tidak disalin atau diunggah; setelah refresh pilih ulang. Tidak perlu `.env.cctv.local` atau penyiapan asset untuk pemutar ini. Panduan terbaru: [docs/stage37-local-video-registration.md](docs/stage37-local-video-registration.md).
 
+Tahap 3.8 menyiapkan `cctv-offline/` (ignored Git) dan mount read-only ke `/data/cctv-offline` pada `ai-service`. Kontrak memakai polygon manual terhadap frame asli dan memvalidasi metadata/hash sumber. Blob URL browser tetap terpisah dan tidak dapat dibaca Docker. Panduan folder, validasi, serta urutan persiapan Tahap 4: [docs/stage38-offline-input-contract.md](docs/stage38-offline-input-contract.md).
+
 ## Batasan sistem
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.

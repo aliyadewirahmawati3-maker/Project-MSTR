@@ -78,8 +78,22 @@ services:
       APP_ENV: development
       PORT: 8001
       LARAVEL_API_URL: http://backend:8000/api
+      SIGAP_OFFLINE_ROOT: /data/cctv-offline
+      SIGAP_QUEUE_ZONES_PATH: /config/cctv/queue_zones.json
     volumes:
       - ./ai-service:/app
+      - type: bind
+        source: ./cctv-offline
+        target: /data/cctv-offline
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./config/cctv
+        target: /config/cctv
+        read_only: true
+        bind:
+          create_host_path: false
     networks:
       - sigap-network
 
@@ -112,4 +126,3 @@ volumes:
 networks:
   sigap-network:
     driver: bridge
-
