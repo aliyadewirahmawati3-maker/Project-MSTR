@@ -2,12 +2,14 @@ from datetime import datetime, timezone
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.queue_summary import router as queue_summary_router
 
 app = FastAPI(
     title="SIGAP AI Service",
     description="Layanan AI/Computer Vision untuk penghitungan kendaraan per zona antrean pada prototype SIGAP.",
     version="0.1.0-baseline"
 )
+app.include_router(queue_summary_router)
 
 # Enable CORS for frontend dashboard communication
 app.add_middleware(
@@ -46,4 +48,3 @@ def health_check():
         "tracking_enabled": False,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
-
