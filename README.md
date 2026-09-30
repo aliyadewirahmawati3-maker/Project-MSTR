@@ -8,6 +8,8 @@ Tahap 3 menyiapkan empat rekaman CCTV lokal/offline, konfigurasi delapan polygon
 
 Tahap 3.5 menampilkan empat rekaman tersebut pada kartu CCTV dashboard menggunakan pemutar HTML5. Dari root proyek, jalankan `npm.cmd --prefix frontend run cctv:prepare`, kemudian `npm.cmd --prefix frontend run dev -- --host 127.0.0.1`. Buka `http://127.0.0.1:3000/#live-monitoring`. Panduan lengkap tersedia di [docs/stage35-cctv-frontend.md](docs/stage35-cctv-frontend.md).
 
+Tahap 3.6 menambahkan overlay SVG delapan zona manual pada rekaman lokal. Tombol **Zona antrean** pada setiap kartu menampilkan/menyembunyikan zona luar (biru) dan dalam (oranye) tanpa mengubah playback. Format konfigurasi, validasi, batas privasi, dan kalibrasi ulang tersedia di [docs/stage36-queue-zones.md](docs/stage36-queue-zones.md).
+
 ## Batasan sistem
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.

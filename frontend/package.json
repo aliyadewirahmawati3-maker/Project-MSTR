@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:zones": "node --test src/config/queueZones.test.js",
     "cctv:prepare": "py -3.13 ../tools/cctv/prepare_frontend.py",
     "dev": "vite",
     "build": "vite build",
