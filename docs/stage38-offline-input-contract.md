@@ -51,7 +51,7 @@ SIGAP_OFFLINE_ROOT=/data/cctv-offline
 SIGAP_QUEUE_ZONES_PATH=/config/cctv/queue_zones.json
 ```
 
-Dependency OpenCV headless digunakan hanya untuk membuka video, membaca metadata, dan memastikan frame awal/referensi/akhir dapat didekode. Tidak ada model atau inferensi yang dimuat. FastAPI tetap standby dengan endpoint health semula; validator dijalankan eksplisit sebagai CLI.
+Dependency OpenCV headless digunakan untuk membuka video, membaca metadata, dan memastikan frame awal/referensi/akhir dapat didekode. Tidak ada model atau inferensi yang dimuat. FastAPI tetap standby tanpa YOLO; endpoint health dan ringkasan antrean konfigurasi tersedia, sedangkan validator dijalankan eksplisit sebagai CLI. Estimator satu-frame yang opt-in didokumentasikan di [offline-queue-estimation.md](offline-queue-estimation.md).
 
 ## Kontrak kamera dan koordinat
 
@@ -146,4 +146,4 @@ Hasil verifikasi perbaikan: 17 test zona/profile, 11 test input browser, 25 regr
 5. Hasil Tahap 4 harus berasal dari inferensi nyata dan diberi penanda rekaman offline. Jika mengeluarkan jumlah per zona, bedakan jumlah objek dalam suatu frame dari jumlah kendaraan unik sepanjang waktu; tanpa tracking tidak boleh mengklaim hitungan unik. Susun kontrak hasil dan tesnya saat tahap tersebut dikerjakan, tanpa data deteksi tiruan.
 6. Integrasikan hasil ke UI/API hanya dalam ruang lingkup Tahap 4 yang disepakati. Tahap 3.8 tidak menambahkan endpoint inferensi, job model, command `infer`, output deteksi, atau keputusan lampu.
 
-Tidak ada command inferensi yang dapat dijalankan sekarang. Semua command pada dokumen ini hanya menyiapkan service dan memvalidasi input. Backend/database tidak diubah; tidak ada YOLO, inferensi, penghitungan, tracking ID, OCR plat, pengenalan wajah, heuristik lampu, atau koneksi ATCS fisik pada tahap ini. Tidak ada commit atau push.
+Tidak ada command inferensi yang dapat dijalankan sekarang. Semua command pada dokumen ini menyiapkan service dan memvalidasi input; estimator opt-in hanya memakai angka simulator/estimasi lokal yang diberi label jujur. Backend/database tidak diubah; tidak ada YOLO, penghitungan kendaraan dari model, tracking ID, OCR plat, pengenalan wajah, heuristik lampu, atau koneksi ATCS fisik pada tahap ini. Tidak ada commit atau push.

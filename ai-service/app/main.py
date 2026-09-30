@@ -37,7 +37,8 @@ def read_root():
 def health_check():
     """
     Health check endpoint for container health probes and system readiness.
-    Sesuai batasan Tahap 1: Tidak melakukan inferensi YOLOv13 dan tidak memproses video.
+    Tidak melakukan inferensi YOLOv13. Pembacaan satu frame hanya terjadi jika
+    estimator offline diaktifkan secara eksplisit pada endpoint ringkasan.
     """
     return {
         "status": "healthy",

@@ -80,6 +80,8 @@ services:
       LARAVEL_API_URL: http://backend:8000/api
       SIGAP_OFFLINE_ROOT: /data/cctv-offline
       SIGAP_QUEUE_ZONES_PATH: /config/cctv/queue_zones.json
+      SIGAP_QUEUE_ESTIMATION_MODE: ${SIGAP_QUEUE_ESTIMATION_MODE:-DISABLED}
+      SIGAP_QUEUE_ESTIMATES_JSON: ${SIGAP_QUEUE_ESTIMATES_JSON:-}
     volumes:
       - ./ai-service:/app
       - type: bind

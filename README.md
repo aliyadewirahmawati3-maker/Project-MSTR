@@ -18,7 +18,7 @@ Tahap 3.8 menyiapkan `cctv-offline/` (ignored Git) dan mount read-only ke `/data
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.
 - Empat kamera pada backend tetap merupakan konfigurasi awal: `UNCONFIGURED`, `stream_url: null`. Alat Tahap 3 membaca rekaman lokal hanya untuk inspeksi metadata dan preview zona; tidak ada CCTV live atau pemrosesan video oleh service aplikasi.
-- AI service hanya menyediakan endpoint kesehatan; inferensi belum aktif. Container sehat tidak berarti deteksi kendaraan aktif.
+- AI service menyediakan health check dan ringkasan konfigurasi/estimator offline; inferensi YOLO belum aktif. Container sehat tidak berarti deteksi kendaraan aktif.
 - Tidak ada YOLO, vehicle tracking/tracking ID, OCR plat nomor, pengenalan wajah, algoritma heuristik keputusan, atau pengendalian lampu fisik.
 - `traffic_measurements` dan `heuristic_decisions` tetap kosong. Data simulator tidak diklaim sebagai hasil deteksi nyata.
 

@@ -1,4 +1,4 @@
-"""Read-only zone configuration summary; no video access or detection."""
+"""Read-only queue summary with an explicit, lightweight offline-estimation mode."""
 
 import os
 from typing import Literal
@@ -7,6 +7,7 @@ from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 from app.local_video import CAMERAS, load_inputs
+from app.queue_estimator import MODE_DISABLED, estimate_queues, configured_mode
 
 router = APIRouter(prefix="/local-video", tags=["Offline configuration"])
 APPROACH_NAMES = {"WEST": "Barat", "NORTH": "Utara", "EAST": "Timur", "SOUTH": "Selatan"}
@@ -17,20 +18,22 @@ class ApproachSummary(BaseModel):
     approach_name: str
     camera_id: str | None
     profile_id: str | None
-    source_type: Literal["OFFLINE_CONFIG"] = "OFFLINE_CONFIG"
+    source_type: Literal["OFFLINE_CONFIG", "OFFLINE_ESTIMATION", "SIMULATOR"] = "OFFLINE_CONFIG"
     # Null means not measured, never an observed empty queue.
-    outer_lane_queue: None = None
-    inner_lane_queue: None = None
-    total_queue: None = None
-    status: Literal["OFFLINE_CONFIG", "WAITING_FOR_DETECTION"]
+    outer_lane_queue: int | None = None
+    inner_lane_queue: int | None = None
+    total_queue: int | None = None
+    status: Literal["OFFLINE_CONFIG", "SIMULATOR", "WAITING_FOR_DETECTION"]
     note: str
 
 
 class QueueSummary(BaseModel):
-    source_type: Literal["OFFLINE_CONFIG"] = "OFFLINE_CONFIG"
+    source_type: Literal["OFFLINE_CONFIG", "OFFLINE_ESTIMATION", "SIMULATOR"] = "OFFLINE_CONFIG"
     configuration_valid: bool
     inference_enabled: Literal[False] = False
-    source_validation: Literal["NOT_RUN"] = "NOT_RUN"
+    estimation_enabled: bool = False
+    estimation_mode: Literal["DISABLED", "SIMULATOR", "OFFLINE_ESTIMATION"] = "DISABLED"
+    source_validation: Literal["NOT_RUN", "FRAME_CHECKED"] = "NOT_RUN"
     error_code: Literal["INVALID_ZONE_CONFIG"] | None = None
     approaches: list[ApproachSummary]
 
@@ -39,24 +42,32 @@ class QueueSummary(BaseModel):
     "/queue-summary",
     response_model=QueueSummary,
     responses={503: {"model": QueueSummary, "description": "Zone configuration missing or invalid"}},
-    summary="Ringkasan konfigurasi antrean offline (belum ada deteksi)",
+    summary="Ringkasan antrean offline (estimator opt-in, tanpa YOLO)",
 )
 def queue_summary(response: Response) -> QueueSummary:
-    """Read manual zones only. Null queues are unmeasured; videos are not validated."""
+    """Read zones and optionally run the explicit one-frame estimator gate."""
     try:
         cameras = load_inputs(os.getenv("SIGAP_QUEUE_ZONES_PATH", "/config/cctv/queue_zones.json"))
+        mode = configured_mode()
+        estimates = estimate_queues(cameras, os.getenv("SIGAP_OFFLINE_ROOT", "/data/cctv-offline"), mode)
+        source_type = "OFFLINE_CONFIG" if mode == MODE_DISABLED else mode
         by_direction = {camera.direction: camera for camera in cameras}
         approaches = [ApproachSummary(
             approach_code=direction,
             approach_name=APPROACH_NAMES[direction],
             camera_id=by_direction[direction].camera_code,
             profile_id=by_direction[direction].profile_id,
-            status="WAITING_FOR_DETECTION",
-            note="Dua zona manual tersedia. Antrean belum diukur; menunggu deteksi. "
-                 "Ringkasan konfigurasi offline saja, bukan hasil kamera atau simulator. "
-                 "Ketersediaan dan kecocokan file video belum diperiksa oleh endpoint ini.",
+            source_type=estimates[by_direction[direction].camera_code].source_type,
+            outer_lane_queue=estimates[by_direction[direction].camera_code].outer,
+            inner_lane_queue=estimates[by_direction[direction].camera_code].inner,
+            total_queue=estimates[by_direction[direction].camera_code].total,
+            status=estimates[by_direction[direction].camera_code].status,
+            note=estimates[by_direction[direction].camera_code].note,
         ) for direction in CAMERAS.values()]
-        return QueueSummary(configuration_valid=True, approaches=approaches)
+        return QueueSummary(configuration_valid=True, source_type=source_type,
+                            estimation_enabled=mode != MODE_DISABLED, estimation_mode=mode,
+                            source_validation="FRAME_CHECKED" if mode != MODE_DISABLED else "NOT_RUN",
+                            approaches=approaches)
     except (OSError, ValueError, KeyError, TypeError, OverflowError):
         # Do not expose filesystem paths or malformed configuration contents.
         # Discard the entire invalid contract rather than mixing in stale profiles.
