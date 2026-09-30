@@ -6,9 +6,11 @@ Tahap 1 mengaktifkan Laravel 12, PostgreSQL 16, dan FastAPI dalam status standby
 
 Tahap 3 menyiapkan empat rekaman CCTV lokal/offline, konfigurasi delapan polygon zona antrean, dan alat validasi/preview mandiri. Panduan, inventaris video, serta batas interpretasi zona tersedia di [docs/stage3-cctv.md](docs/stage3-cctv.md).
 
-Tahap 3.5 menampilkan empat rekaman tersebut pada kartu CCTV dashboard menggunakan pemutar HTML5. Dari root proyek, jalankan `npm.cmd --prefix frontend run cctv:prepare`, kemudian `npm.cmd --prefix frontend run dev -- --host 127.0.0.1`. Buka `http://127.0.0.1:3000/#live-monitoring`. Panduan lengkap tersedia di [docs/stage35-cctv-frontend.md](docs/stage35-cctv-frontend.md).
+Tahap 3.5 memperkenalkan pemutar HTML5 pada kartu CCTV. Mekanisme salinan asset pada tahap tersebut kini digantikan file picker Tahap 3.7. [Dokumentasi Tahap 3.5](docs/stage35-cctv-frontend.md) dipertahankan sebagai catatan historis.
 
 Tahap 3.6 menambahkan overlay SVG delapan zona manual pada rekaman lokal. Tombol **Zona antrean** pada setiap kartu menampilkan/menyembunyikan zona luar (biru) dan dalam (oranye) tanpa mengubah playback. Format konfigurasi, validasi, batas privasi, dan kalibrasi ulang tersedia di [docs/stage36-queue-zones.md](docs/stage36-queue-zones.md).
+
+Tahap 3.7 memakai tombol **Pilih video lokal** pada setiap kartu. Jalankan `npm.cmd --prefix frontend run dev -- --host 127.0.0.1`, buka `http://127.0.0.1:3000/#live-monitoring`, lalu pilih empat rekaman dari perangkat. Video tidak disalin atau diunggah; setelah refresh pilih ulang. Tidak perlu `.env.cctv.local` atau penyiapan asset untuk pemutar ini. Panduan terbaru: [docs/stage37-local-video-registration.md](docs/stage37-local-video-registration.md).
 
 ## Batasan sistem
 

@@ -1,5 +1,7 @@
 # Tahap 3.6: overlay zona antrean manual
 
+> Mulai Tahap 3.7, pilih rekaman melalui file picker pada setiap kartu sebelum overlay tampil. Konfigurasi polygon tetap sama. Instruksi penyiapan asset dari tahap sebelumnya telah digantikan [alur registrasi lokal Tahap 3.7](stage37-local-video-registration.md), tanpa penyalinan video.
+
 Tahap ini menampilkan delapan polygon konfigurasi pada empat rekaman CCTV lokal/offline. Zona menandai bidang jalan untuk persiapan analisis di tahap berikutnya. Polygon dibuat manual dari frame asli Tahap 3, bukan hasil AI dan bukan pengukuran panjang antrean. Status **Zona konfigurasi siap — menunggu analisis AI** menyatakan konfigurasi telah tervalidasi; tidak berarti analisis AI sedang berjalan.
 
 Tidak ada perubahan pada backend, database, Docker, environment, sumber MP4, kontrol pemutaran HTML5, atau simulator lampu/kendaraan.

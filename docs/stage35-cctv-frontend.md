@@ -1,5 +1,7 @@
 # Tahap 3.5: pemutar rekaman CCTV lokal di dashboard
 
+> Catatan historis: Tahap 3.7 menggantikan mekanisme salinan asset dengan file picker browser. Command npm `cctv:prepare` telah dihapus. Jangan menjalankan alur penyalinan pada dokumen ini untuk Tahap 3.7; gunakan [panduan registrasi lokal terbaru](stage37-local-video-registration.md). Tool Python lama bukan bagian dari alur pemutar saat ini.
+
 Panel **Live Monitoring CCTV — 4 Arah** mempertahankan grid, kartu, rasio gambar, dan informasi lajur dashboard. Keempat kartu menampilkan video HTML5 berlabel **REKAMAN LOKAL / OFFLINE DEMO**. Ini pemutaran rekaman, bukan CCTV live; tidak ada inferensi/deteksi atau penghitungan kendaraan, tracking ID, OCR plat, pengenalan wajah, heuristik, atau koneksi ATCS. Backend, database, Docker, dan simulator tidak diubah.
 
 ## Menyiapkan video

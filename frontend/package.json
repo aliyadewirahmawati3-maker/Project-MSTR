@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:local-video": "node --test src/composables/useLocalVideo.test.js",
     "test:zones": "node --test src/config/queueZones.test.js",
-    "cctv:prepare": "py -3.13 ../tools/cctv/prepare_frontend.py",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000"
