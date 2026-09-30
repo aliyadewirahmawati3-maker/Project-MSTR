@@ -2,19 +2,22 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import AppIcon from './AppIcon.vue'
 import QueueZoneOverlay from './QueueZoneOverlay.vue'
-import { zonesForCamera } from '../config/queueZones.js'
+import { zoneProfiles } from '../config/queueZones.js'
+import { useVideoZoneProfile } from '../composables/useVideoZoneProfile.js'
 import { directionLabel, movementLabel } from '../services/sigapApi.js'
 import { useLocalVideo } from '../composables/useLocalVideo.js'
 import { formatDuration, localVideoAccept } from '../utils/localVideo.js'
 
 const props = defineProps({ camera: { type: Object, required: true } })
 const registration = useLocalVideo()
+const zoneSession = useVideoZoneProfile(registration)
+const { identity, identification, inputCameraCode, selectedProfile, sameViewConfirmed,
+  activeZones: zones, canAnalyzeZones, status: zoneStatus, issue: zoneIssue } = zoneSession
 const { file, source, version, state, metadata, failure, selectionError, playback, status } = registration
 const picker = ref(null)
 const videoElement = ref(null)
 const showZones = ref(true)
-const zones = computed(() => zonesForCamera(props.camera.camera_code))
-const name = computed(() => `CCTV ${directionLabel(props.camera.direction)}`)
+const name = computed(() => `CCTV ${directionLabel(zoneProfiles.find(p => p.camera_code === inputCameraCode.value)?.direction || props.camera.direction)}`)
 const token = event => Number(event.target.dataset.sourceVersion)
 
 function selected(event) {
@@ -34,12 +37,12 @@ async function loaded(event) {
     registration.setPlayback('Autoplay tidak dimulai · tekan Putar', currentVersion)
   }
 }
-onBeforeUnmount(registration.dispose)
+onBeforeUnmount(() => { zoneSession.dispose(); registration.dispose() })
 </script>
 
 <template>
   <article class="camera-card" :aria-label="`${name}, rekaman lokal offline`">
-    <div class="camera-heading"><h3><AppIcon name="camera" :size="16" />{{ name }}</h3><span class="camera-number">{{ camera.camera_code }}</span></div>
+    <div class="camera-heading"><h3><AppIcon name="camera" :size="16" />{{ name }}</h3><span class="camera-number">{{ inputCameraCode || camera.camera_code }}</span></div>
     <div class="camera-frame">
       <video
         v-if="source"
@@ -58,7 +61,7 @@ onBeforeUnmount(registration.dispose)
         @waiting="registration.setPlayback('Menunggu buffer rekaman…', token($event))"
         @error="registration.failed($event.target.error?.code, token($event))"
       >Browser ini tidak mendukung pemutaran video HTML5.</video>
-      <QueueZoneOverlay v-if="showZones && state === 'ready'" :video="videoElement" :zones="zones" />
+      <QueueZoneOverlay v-if="showZones && canAnalyzeZones" :key="`${version}-${selectedProfile}`" :video="videoElement" :zones="zones" />
       <span class="camera-standby camera-offline-badge">REKAMAN LOKAL / OFFLINE DEMO</span>
       <div v-if="state === 'empty' || state === 'error'" class="camera-empty"><AppIcon name="cameraOff" :size="30" /><p>{{ state === 'empty' ? 'PILIH REKAMAN LOKAL' : 'REKAMAN TIDAK DAPAT DIPUTAR' }}</p><span>File diputar di browser, tanpa diunggah.</span></div>
       <span class="frame-corner top-left"></span><span class="frame-corner bottom-right"></span>
@@ -81,17 +84,39 @@ onBeforeUnmount(registration.dispose)
       <p>{{ failure }}</p>
       <button type="button" @click="registration.retry">Coba lagi</button>
     </div>
-    <dl class="lane-info"><div v-for="lane in camera.zones" :key="lane.zone_id"><dt>{{ lane.lane_type === 'outer' ? 'Lajur luar' : 'Lajur dalam' }}</dt><dd>{{ movementLabel(lane.movement_rules) }}</dd></div></dl>
+    <div v-if="file" class="zone-profile-controls">
+      <p v-if="identity">Sumber terdaftar: {{ identity.camera_code }} (SHA256 cocok)</p>
+      <label v-else>Sumber kamera
+        <select :value="inputCameraCode" :disabled="identification === 'checking'" @change="zoneSession.chooseCamera($event.target.value)">
+          <option value="">Belum dikenal / kamera baru</option>
+          <option v-for="profile in zoneProfiles" :key="profile.camera_code" :value="profile.camera_code">{{ profile.camera_code }} — {{ directionLabel(profile.direction) }}</option>
+        </select>
+      </label>
+      <label>Profile zona
+        <select :value="selectedProfile" :disabled="identification === 'checking'" @change="zoneSession.chooseProfile($event.target.value)">
+          <option value="">Belum dipilih</option>
+          <option v-for="profile in zoneProfiles" :key="profile.profile_id" :value="profile.profile_id">{{ profile.profile_id }} — {{ directionLabel(profile.direction) }}</option>
+        </select>
+      </label>
+      <label v-if="!identity && identification !== 'checking'" class="zone-confirm"><input type="checkbox" :checked="sameViewConfirmed" @change="zoneSession.confirmSameView($event.target.checked)" />Saya memastikan kamera, sudut, dan cakupan gambar sama dengan profile.</label>
+      <p v-if="!canAnalyzeZones && identification !== 'checking'">{{ zoneIssue }} Analisis zona dinonaktifkan.</p>
+    </div>
+    <dl class="lane-info"><div v-for="lane in zones" :key="lane.id"><dt>{{ lane.laneType === 'outer' ? 'Lajur luar' : 'Lajur dalam' }}</dt><dd>{{ movementLabel(lane.movementRule) }}</dd></div></dl>
     <div class="queue-zone-controls">
-      <button type="button" :aria-pressed="showZones" :aria-label="`Zona antrean ${name}`" @click="showZones = !showZones">Zona antrean <span>{{ showZones ? 'Aktif' : 'Nonaktif' }}</span></button>
+      <button type="button" :disabled="!canAnalyzeZones" :aria-pressed="showZones && canAnalyzeZones" :aria-label="`Zona antrean ${name}`" @click="showZones = !showZones">Zona antrean <span>{{ showZones && canAnalyzeZones ? 'Aktif' : 'Nonaktif' }}</span></button>
       <span class="queue-zone-legend"><span><i class="outer"></i>Luar</span><span><i class="inner"></i>Dalam</span></span>
     </div>
     <p class="queue-zone-note">Konfigurasi manual untuk demo. Periksa kesesuaian zona jika sudut rekaman berbeda.</p>
-    <p class="queue-zone-note">Zona konfigurasi siap — menunggu analisis AI</p>
+    <p class="queue-zone-note zone-calibration-status" role="status">{{ zoneStatus }}</p>
   </article>
 </template>
 
 <style scoped>
+.zone-profile-controls { margin-top: 8px; display: grid; gap: 6px; font-size: 10px; color: #738399; }
+.zone-profile-controls label { display: grid; gap: 4px; }
+.zone-profile-controls select { min-width: 0; width: 100%; padding: 5px; border: 1px solid #d6e1ef; border-radius: 4px; background: #fff; color: #496681; font-size: 10px; }
+.zone-profile-controls .zone-confirm { display: flex; align-items: flex-start; line-height: 1.5; }
+.queue-zone-controls button:disabled { opacity: .6; cursor: not-allowed; }
 .local-video-controls { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .local-video-picker { display: none; }
 .local-video-controls button { padding: 5px 7px; border: 1px solid #d6e1ef; border-radius: 4px; background: #edf4fd; color: #496681; font-size: 10px; }

@@ -26,3 +26,20 @@ Object.freeze(queueZones)
 export function zonesForCamera(cameraId) {
   return queueZones.filter(zone => zone.cameraId === cameraId)
 }
+
+function freeze(value) {
+  if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value) }
+  return value
+}
+
+export const zoneProfiles = freeze(source.cameras.map(camera => ({
+  profile_id: camera.profile_id,
+  camera_code: camera.camera_code,
+  direction: camera.direction,
+  reference_frame: { ...camera.reference_frame },
+  calibration: { ...camera.calibration, reference_source_sha256: camera.source_sha256,
+    reference_frame_seconds: camera.reference_frame_seconds, notes: camera.geometry_notes },
+  zones: zonesForCamera(camera.camera_code),
+})))
+export const sourceIdentities = freeze(source.video_sources.map(identity => ({ ...identity })))
+export const aspectRatioTolerance = source.aspect_ratio_tolerance

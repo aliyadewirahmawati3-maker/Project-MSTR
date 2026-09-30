@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from app.local_video import InputError, load_inputs, main, validate_polygon, validate_sources
+from app.local_video import InputError, SourceIdentity, load_inputs, main, validate_polygon, validate_sources
 
 DEFAULT_CONFIG = Path(os.getenv("SIGAP_QUEUE_ZONES_PATH", Path(__file__).resolve().parents[2] / "config/cctv/queue_zones.json"))
 
@@ -114,7 +114,8 @@ class LocalVideoInputTests(unittest.TestCase):
         camera = self.cameras[0]
         payload = b"unit-test fixture; not video or detection data"
         if match_hash:
-            camera = replace(camera, source_sha256=hashlib.sha256(payload).hexdigest())
+            identity = SourceIdentity(hashlib.sha256(payload).hexdigest(), camera.camera_code, camera.profile_id)
+            camera = replace(camera, registered_sources=(identity,))
         metadata = {"width": camera.width, "height": camera.height, "fps": camera.fps,
                     "frame_count": camera.frame_count, "duration_seconds": camera.frame_count / camera.fps}
         metadata.update(metadata_patch or {})
@@ -128,14 +129,23 @@ class LocalVideoInputTests(unittest.TestCase):
             (Path(directory) / camera.filename).write_bytes(payload)
             return validate_sources([camera], directory, probe=probe)[0]
 
-    def test_reference_resolution_mismatch_fails(self):
-        self.assertEqual(self.source_case(metadata_patch={"width": 640, "height": 360})["status"], "RESOLUTION_MISMATCH")
+    def test_scaled_resolution_uses_same_normalized_zones(self):
+        report = self.source_case(metadata_patch={"width": 640, "height": 360})
+        self.assertEqual(report["status"], "VALID")
+        for zone, pixel in zip(self.cameras[0].zones, report["zones"]):
+            self.assertEqual(pixel["polygon_pixels"], [[round(x * 639), round(y * 359)] for x, y in zone.polygon])
 
-    def test_changed_video_timing_fails(self):
-        self.assertEqual(self.source_case(metadata_patch={"fps": 24})["status"], "METADATA_MISMATCH")
+    def test_different_aspect_ratio_rejected(self):
+        self.assertEqual(self.source_case(metadata_patch={"width": 640, "height": 480})["status"], "ASPECT_RATIO_MISMATCH")
+
+    def test_registered_same_view_can_have_different_timing(self):
+        self.assertEqual(self.source_case(metadata_patch={"fps": 24})["status"], "VALID")
 
     def test_same_resolution_different_content_fails_hash(self):
-        self.assertEqual(self.source_case(match_hash=False)["status"], "SOURCE_HASH_MISMATCH")
+        report = self.source_case(match_hash=False)
+        self.assertEqual(report["status"], "UNCALIBRATED_SOURCE")
+        self.assertFalse(report["zone_analysis_eligible"])
+        self.assertNotIn("zones", report)
 
     def test_unreadable_video_is_not_ready(self):
         report = self.source_case(probe_error=InputError("UNREADABLE_VIDEO", "Decode failed"))
@@ -145,7 +155,25 @@ class LocalVideoInputTests(unittest.TestCase):
     def test_valid_source_exposes_only_input_metadata_and_manual_zones(self):
         report = self.source_case()
         self.assertEqual(report["status"], "VALID")
-        self.assertEqual(set(report), {"camera_code", "direction", "filename", "status", "metadata", "source_sha256", "zones"})
+        self.assertEqual(set(report), {"camera_code", "direction", "filename", "status", "metadata", "source_sha256", "zones", "profile_id", "zone_analysis_eligible"})
+
+    def test_input_camera_must_match_selected_profile(self):
+        with self.assertRaises(InputError) as error:
+            self.cameras[0].pixel_zones(1280, 720, "CAM-N-01")
+        self.assertEqual(error.exception.code, "CAMERA_PROFILE_MISMATCH")
+        self.data["video_sources"][0]["profile_id"] = "CAM-N-01"
+        with self.assertRaises(InputError):
+            self.load_modified(self.data)
+
+    def test_registered_north_file_cannot_use_west_input_profile(self):
+        payload = b"source identity unit fixture"
+        north = SourceIdentity(hashlib.sha256(payload).hexdigest(), "CAM-N-01", "CAM-N-01")
+        camera = replace(self.cameras[0], registered_sources=(north,))
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / camera.filename).write_bytes(payload)
+            report = validate_sources([camera], directory, probe=lambda *_: self.fail("Mismatched source must not reach decoding"))[0]
+        self.assertEqual(report["status"], "CAMERA_PROFILE_MISMATCH")
+        self.assertNotIn("zones", report)
 
     def test_schema_only_never_claims_files_ready(self):
         with contextlib.redirect_stdout(io.StringIO()) as output:

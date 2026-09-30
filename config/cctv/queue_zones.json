@@ -1,13 +1,20 @@
 {
   "schema_version": 1,
-  "input_contract_version": 1,
+  "input_contract_version": 2,
+  "aspect_ratio_tolerance": 0.005,
+  "video_sources": [
+    {"source_sha256": "177153c23c3273e1c62f361956294cd300ebb37f95cb216cf9e28415fceef53c", "camera_code": "CAM-W-01", "profile_id": "CAM-W-01", "viewpoint_confirmed": true},
+    {"source_sha256": "97e348e96548fc7b9871d146e408a68e70cb07434bfd5cb6675cfddc40509375", "camera_code": "CAM-N-01", "profile_id": "CAM-N-01", "viewpoint_confirmed": true},
+    {"source_sha256": "e4d906dd0af08d54296e209d4145faa059a68b56c45496fa5f43e71a27a4a278", "camera_code": "CAM-E-01", "profile_id": "CAM-E-01", "viewpoint_confirmed": true},
+    {"source_sha256": "fa580056f0db43c8c83229edcc05eae97203572f1d0b7dc1dddb95eb69617977", "camera_code": "CAM-S-01", "profile_id": "CAM-S-01", "viewpoint_confirmed": true}
+  ],
   "intersection_code": "BDG-IBR-ADJ-01",
   "source_kind": "LOCAL_OFFLINE_RECORDING",
   "mapping_basis": "USER_ASSIGNED_SCENARIO_NOT_VERIFIED_GEOGRAPHIC_DIRECTIONS",
   "coordinate_system": {
     "space": "normalized",
     "reference": "original_decoded_frame",
-    "resolution_policy": "reject_mismatch",
+    "resolution_policy": "same_aspect_ratio",
     "origin": "top_left",
     "x_axis": "right",
     "y_axis": "down",
@@ -18,6 +25,9 @@
   "cameras": [
     {
       "camera_code": "CAM-W-01",
+      "profile_id": "CAM-W-01",
+      "reference_frame": {"width": 1920, "height": 1080, "aspect_ratio": 1.7777777777777777},
+      "calibration": {"revision": 1, "status": "VALID", "method": "MANUAL_FROM_DECODED_FRAMES"},
       "direction": "WEST",
       "direction_label": "BARAT",
       "video_env": "SIGAP_VIDEO_WEST",
@@ -35,6 +45,9 @@
     },
     {
       "camera_code": "CAM-N-01",
+      "profile_id": "CAM-N-01",
+      "reference_frame": {"width": 1920, "height": 1080, "aspect_ratio": 1.7777777777777777},
+      "calibration": {"revision": 1, "status": "VALID", "method": "MANUAL_FROM_DECODED_FRAMES"},
       "direction": "NORTH",
       "direction_label": "UTARA",
       "video_env": "SIGAP_VIDEO_NORTH",
@@ -52,6 +65,9 @@
     },
     {
       "camera_code": "CAM-E-01",
+      "profile_id": "CAM-E-01",
+      "reference_frame": {"width": 1920, "height": 1080, "aspect_ratio": 1.7777777777777777},
+      "calibration": {"revision": 1, "status": "VALID", "method": "MANUAL_FROM_DECODED_FRAMES"},
       "direction": "EAST",
       "direction_label": "TIMUR",
       "video_env": "SIGAP_VIDEO_EAST",
@@ -69,6 +85,9 @@
     },
     {
       "camera_code": "CAM-S-01",
+      "profile_id": "CAM-S-01",
+      "reference_frame": {"width": 1920, "height": 1080, "aspect_ratio": 1.7777777777777777},
+      "calibration": {"revision": 1, "status": "VALID", "method": "MANUAL_FROM_DECODED_FRAMES"},
       "direction": "SOUTH",
       "direction_label": "SELATAN",
       "video_env": "SIGAP_VIDEO_SOUTH",
