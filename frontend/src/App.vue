@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDashboardConfiguration } from './composables/useDashboardConfiguration.js'
 import { useQueueSummary } from './composables/useQueueSummary.js'
 import { formatQueueValue, laneQueueLabel } from './services/aiQueueSummary.js'
+import { recommendPhase } from './utils/phaseRecommendation.js'
 import AppIcon from './components/AppIcon.vue'
 import IntersectionMap from './components/IntersectionMap.vue'
 import CctvMonitoring from './components/CctvMonitoring.vue'
@@ -21,6 +22,7 @@ const menus = [
 ]
 const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
 const { approaches: queueApproaches, loading: queueLoading, error: queueError, badge: queueBadge, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary()
+const phaseRecommendation = computed(() => recommendPhase(queueApproaches.value))
 const systemMode = computed(() => configurationFresh.value ? configuration.value.systemStatus.current_mode : 'Standby')
 const aiStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_ai_healthy === true ? 'Sehat' : 'Standby')
 const cctvStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_cctv_healthy === true ? 'Sehat (API)' : 'Standby')
@@ -172,8 +174,8 @@ onBeforeUnmount(() => {
           <IntersectionMap :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" />
           <div class="decision-column">
             <section id="rekomendasi-ai" class="card recommendation-card" tabindex="-1" aria-labelledby="recommendation-title">
-              <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span class="badge badge-neutral">Standby</span></div>
-              <div class="recommendation-content"><dl class="recommendation-metrics"><div><dt>Fase rekomendasi</dt><dd>—</dd></div><div><dt>Skor prioritas</dt><dd>—</dd></div><div><dt>Durasi hijau</dt><dd>—</dd></div></dl><div class="recommendation-reason"><AppIcon name="clock" :size="19" /><div><strong>Menunggu data antrean</strong><p><span class="sr-only">Alasan: </span>Menunggu pengukuran zona antrean dari CCTV.</p></div></div><p class="heuristic-note">Rekomendasi belum tersedia; menunggu data CCTV.</p></div>
+              <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span class="badge badge-neutral">{{ phaseRecommendation.status }}</span></div>
+              <div class="recommendation-content"><dl class="recommendation-metrics"><div><dt>Fase rekomendasi</dt><dd>{{ phaseRecommendation.recommended_phase === 'WAITING_FOR_DATA' ? '—' : phaseRecommendation.label }}</dd></div><div><dt>Skor prioritas</dt><dd>{{ phaseRecommendation.priority_score ?? '—' }}</dd></div><div><dt>Durasi hijau</dt><dd>{{ phaseRecommendation.recommended_green_seconds == null ? '—' : `${phaseRecommendation.recommended_green_seconds} dtk` }}</dd></div></dl><div class="recommendation-reason"><AppIcon name="clock" :size="19" /><div><strong>{{ phaseRecommendation.recommended_phase === 'WAITING_FOR_DATA' ? 'Menunggu data antrean' : phaseRecommendation.label }}</strong><p><span class="sr-only">Alasan: </span>{{ phaseRecommendation.reason }}</p></div></div><p class="heuristic-note">{{ phaseRecommendation.status === 'WAITING_FOR_DETECTION' ? 'Rekomendasi belum tersedia; deteksi kendaraan belum tersedia.' : 'Heuristik simulator berbasis ringkasan antrean; keputusan tetap dipantau operator.' }}</p></div>
             </section>
             <section class="card integration-card" aria-labelledby="integration-title">
               <div class="card-heading"><div><h2 id="integration-title">Status Integrasi ATCS</h2><p>Alur mode operasional sistem</p></div><AppIcon name="link" class="muted-icon" :size="19" /></div>
