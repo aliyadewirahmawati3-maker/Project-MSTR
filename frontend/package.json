@@ -7,6 +7,8 @@
     "test:local-video": "node --test src/composables/useLocalVideo.test.js src/composables/useQueueSummary.test.js",
     "test:zones": "node --test src/config/queueZones.test.js src/composables/useVideoZoneProfile.test.js",
     "test:phase-recommendation": "node --test src/utils/phaseRecommendation.test.js",
+    "test:queue-source": "node --test src/utils/queueSource.test.js",
+    "test:map-mode": "node --test src/composables/useMapDisplayMode.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000"

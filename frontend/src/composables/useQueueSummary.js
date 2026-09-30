@@ -1,5 +1,6 @@
 import { computed, ref } from 'vue'
 import { getLocalVideoQueueSummary, QUEUE_APPROACH_LABELS, QUEUE_APPROACH_ORDER } from '../services/aiQueueSummary.js'
+import { getQueueSourcePresentation } from '../utils/queueSource.js'
 
 const QUEUE_INTERVAL_MS = 15_000
 const OFFLINE_MESSAGE = 'AI service tidak dapat dihubungi; ringkasan antrean menunggu deteksi.'
@@ -38,7 +39,12 @@ export function useQueueSummary(options = {}) {
   let disposed = false
 
   const approaches = computed(() => summary.value?.approaches || fallbackApproaches())
-  const badge = computed(() => loading.value ? 'Memuat' : error.value ? 'AI offline' : summary.value?.source_type || 'Menunggu data')
+  const sourceInfo = computed(() => {
+    const hasData = approaches.value.some(row => Number.isFinite(row.total_queue) && row.total_queue >= 0 && row.status !== 'WAITING_FOR_DETECTION')
+    const status = error.value ? 'ERROR' : loading.value ? 'LOADING' : hasData ? '' : 'WAITING_FOR_DETECTION'
+    return getQueueSourcePresentation(summary.value?.source_type, status)
+  })
+  const badge = computed(() => sourceInfo.value.label)
 
   function schedule() {
     clearTimeout(pollTimer)
@@ -84,5 +90,5 @@ export function useQueueSummary(options = {}) {
     controller?.abort()
   }
 
-  return { summary, approaches, loading, error, lastChecked, badge, refresh, start, dispose }
+  return { summary, approaches, loading, error, lastChecked, badge, sourceInfo, refresh, start, dispose }
 }

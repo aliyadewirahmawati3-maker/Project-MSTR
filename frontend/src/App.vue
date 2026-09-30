@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDashboardConfiguration } from './composables/useDashboardConfiguration.js'
 import { useQueueSummary } from './composables/useQueueSummary.js'
-import { formatQueueValue, laneQueueLabel } from './services/aiQueueSummary.js'
+import { formatQueueValue } from './services/aiQueueSummary.js'
 import { recommendPhase } from './utils/phaseRecommendation.js'
 import AppIcon from './components/AppIcon.vue'
 import IntersectionMap from './components/IntersectionMap.vue'
@@ -21,8 +21,12 @@ const menus = [
   { label: 'Pengaturan Simpang', icon: 'settings' },
 ]
 const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
-const { approaches: queueApproaches, loading: queueLoading, error: queueError, badge: queueBadge, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary()
+const { approaches: queueApproaches, loading: queueLoading, sourceInfo: queueSource, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary()
 const phaseRecommendation = computed(() => recommendPhase(queueApproaches.value))
+const awaitingQueues = computed(() => phaseRecommendation.value.recommended_phase === 'WAITING_FOR_DATA')
+const recommendationReason = computed(() => awaitingQueues.value
+  ? 'Deteksi antrean belum tersedia.'
+  : phaseRecommendation.value.reason)
 const systemMode = computed(() => configurationFresh.value ? configuration.value.systemStatus.current_mode : 'Standby')
 const aiStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_ai_healthy === true ? 'Sehat' : 'Standby')
 const cctvStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_cctv_healthy === true ? 'Sehat (API)' : 'Standby')
@@ -155,16 +159,14 @@ onBeforeUnmount(() => {
             </div>
           </section>
           <section class="card queue-card" aria-labelledby="queue-title">
-            <div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span class="badge badge-neutral">{{ queueBadge }}</span></div>
-            <p v-if="queueLoading" class="queue-summary-note" role="status">Memuat ringkasan antrean dari AI service...</p>
-            <p v-else-if="queueError" class="queue-summary-note" role="status">{{ queueError }}</p>
+            <div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span :class="['badge', `badge-${queueSource.variant}`]">{{ queueSource.label }}</span></div>
+            <p class="queue-summary-note" role="status">{{ queueSource.help }}</p>
             <div class="queue-metrics" :aria-busy="queueLoading">
               <div v-for="queue in queueApproaches" :key="queue.approach_code" class="queue-metric" :title="queue.note">
                 <div><span>{{ queue.approach_name }}</span><strong>{{ formatQueueValue(queue.total_queue) }}</strong></div>
                 <div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment" :class="{ active: Number.isFinite(queue.total_queue) && segment <= Math.min(12, queue.total_queue) }"></i></div>
-                <p>Luar: {{ laneQueueLabel(queue.outer_lane_queue) }}</p>
-                <p>Dalam: {{ laneQueueLabel(queue.inner_lane_queue) }}</p>
-                <p class="queue-source-line">{{ queue.source_type }} / {{ queue.status }}</p>
+                <p>Luar: {{ formatQueueValue(queue.outer_lane_queue) }}</p>
+                <p>Dalam: {{ formatQueueValue(queue.inner_lane_queue) }}</p>
               </div>
             </div>
           </section>
@@ -174,8 +176,16 @@ onBeforeUnmount(() => {
           <IntersectionMap :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" />
           <div class="decision-column">
             <section id="rekomendasi-ai" class="card recommendation-card" tabindex="-1" aria-labelledby="recommendation-title">
-              <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span class="badge badge-neutral">{{ phaseRecommendation.status }}</span></div>
-              <div class="recommendation-content"><dl class="recommendation-metrics"><div><dt>Fase rekomendasi</dt><dd>{{ phaseRecommendation.recommended_phase === 'WAITING_FOR_DATA' ? '—' : phaseRecommendation.label }}</dd></div><div><dt>Skor prioritas</dt><dd>{{ phaseRecommendation.priority_score ?? '—' }}</dd></div><div><dt>Durasi hijau</dt><dd>{{ phaseRecommendation.recommended_green_seconds == null ? '—' : `${phaseRecommendation.recommended_green_seconds} dtk` }}</dd></div></dl><div class="recommendation-reason"><AppIcon name="clock" :size="19" /><div><strong>{{ phaseRecommendation.recommended_phase === 'WAITING_FOR_DATA' ? 'Menunggu data antrean' : phaseRecommendation.label }}</strong><p><span class="sr-only">Alasan: </span>{{ phaseRecommendation.reason }}</p></div></div><p class="heuristic-note">{{ phaseRecommendation.status === 'WAITING_FOR_DETECTION' ? 'Rekomendasi belum tersedia; deteksi kendaraan belum tersedia.' : 'Heuristik simulator berbasis ringkasan antrean; keputusan tetap dipantau operator.' }}</p></div>
+              <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span :class="['badge', `badge-${queueSource.variant}`]">{{ queueSource.label }}</span></div>
+              <div class="recommendation-content">
+                <dl class="recommendation-metrics">
+                  <div><dt>Fase rekomendasi</dt><dd class="recommendation-phase">{{ awaitingQueues ? 'Menunggu data' : phaseRecommendation.label }}</dd></div>
+                  <div><dt>Skor prioritas</dt><dd>{{ phaseRecommendation.priority_score ?? '-' }}</dd></div>
+                  <div><dt>Durasi hijau</dt><dd>{{ phaseRecommendation.recommended_green_seconds == null ? '-' : `${phaseRecommendation.recommended_green_seconds} dtk` }}</dd></div>
+                </dl>
+                <div class="recommendation-reason" role="status"><AppIcon name="clock" :size="19" /><p><span class="sr-only">Alasan: </span>{{ recommendationReason }}</p></div>
+                <p v-if="queueSource.note" class="heuristic-note">{{ queueSource.note }}</p>
+              </div>
             </section>
             <section class="card integration-card" aria-labelledby="integration-title">
               <div class="card-heading"><div><h2 id="integration-title">Status Integrasi ATCS</h2><p>Alur mode operasional sistem</p></div><AppIcon name="link" class="muted-icon" :size="19" /></div>

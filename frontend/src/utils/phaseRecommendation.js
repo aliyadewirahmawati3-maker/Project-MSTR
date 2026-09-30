@@ -85,8 +85,8 @@ export function recommendPhase(summary) {
     recommended_phase: recommendedPhase,
     label: PHASE_LABELS[recommendedPhase],
     reason: balanced
-      ? 'Antrean Barat–Timur dan Utara–Selatan seimbang; gunakan fase default.'
-      : `Total antrean ${westEast ? 'Barat–Timur' : 'Utara–Selatan'} lebih tinggi berdasarkan data konfigurasi.`,
+      ? 'Antrean seimbang; gunakan fase default.'
+      : `Antrean ${westEast ? 'Barat–Timur' : 'Utara–Selatan'} lebih tinggi.`,
     priority_score: priorityScore,
     recommended_green_seconds: recommendedGreenSeconds,
     status: 'SIMULATOR',
