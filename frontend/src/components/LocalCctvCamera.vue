@@ -1,5 +1,7 @@
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, ref } from 'vue'
+import DetectionOverlay from './DetectionOverlay.vue'
+import { useFrameInference } from '../composables/useFrameInference.js'
 import AppIcon from './AppIcon.vue'
 import QueueZoneOverlay from './QueueZoneOverlay.vue'
 import { zoneProfiles } from '../config/queueZones.js'
@@ -16,6 +18,8 @@ const { identity, identification, inputCameraCode, selectedProfile, sameViewConf
 const { file, source, version, state, metadata, failure, selectionError, playback, status } = registration
 const picker = ref(null)
 const videoElement = ref(null)
+const inference = useFrameInference(videoElement, registration, zoneSession, props.camera, inject('localInference'))
+const { result: detectionResult, detections, enabled: inferenceEnabled, label: inferenceLabel } = inference
 const showZones = ref(true)
 const name = computed(() => `CCTV ${directionLabel(zoneProfiles.find(p => p.camera_code === inputCameraCode.value)?.direction || props.camera.direction)}`)
 const token = event => Number(event.target.dataset.sourceVersion)
@@ -37,7 +41,7 @@ async function loaded(event) {
     registration.setPlayback('Autoplay tidak dimulai · tekan Putar', currentVersion)
   }
 }
-onBeforeUnmount(() => { zoneSession.dispose(); registration.dispose() })
+onBeforeUnmount(() => { inference.dispose(); zoneSession.dispose(); registration.dispose() })
 </script>
 
 <template>
@@ -62,12 +66,14 @@ onBeforeUnmount(() => { zoneSession.dispose(); registration.dispose() })
         @error="registration.failed($event.target.error?.code, token($event))"
       >Browser ini tidak mendukung pemutaran video HTML5.</video>
       <QueueZoneOverlay v-if="showZones && canAnalyzeZones" :key="`${version}-${selectedProfile}`" :video="videoElement" :zones="zones" />
+      <DetectionOverlay v-if="inferenceEnabled" :video="videoElement" :detections="detections" />
       <span class="camera-standby camera-offline-badge">Rekaman lokal</span>
-      <div v-if="state === 'empty' || state === 'error'" class="camera-empty"><AppIcon name="cameraOff" :size="30" /><p>{{ state === 'empty' ? 'PILIH REKAMAN LOKAL' : 'REKAMAN TIDAK DAPAT DIPUTAR' }}</p><span>File diputar di browser, tanpa diunggah.</span></div>
+      <div v-if="state === 'empty' || state === 'error'" class="camera-empty"><AppIcon name="cameraOff" :size="30" /><p>{{ state === 'empty' ? 'PILIH REKAMAN LOKAL' : 'REKAMAN TIDAK DAPAT DIPUTAR' }}</p><span>Video lokal · snapshot YOLO hanya ke localhost.</span></div>
       <span class="frame-corner top-left"></span><span class="frame-corner bottom-right"></span>
     </div>
     <div class="camera-status-row" role="status">
-      <span class="badge badge-neutral">Menunggu AI</span>
+      <span class="badge badge-neutral">{{ inferenceLabel }}</span>
+      <span v-if="inferenceEnabled && detectionResult && detections.length" class="camera-state-hint">Frame {{ detectionResult.video_time_seconds.toFixed(1) }} dtk</span>
       <span v-if="state === 'loading'" class="camera-state-hint">Memuat video…</span>
       <span v-else-if="identification === 'checking'" class="camera-state-hint">Memeriksa sumber…</span>
       <span v-else-if="state === 'ready' && !canAnalyzeZones" class="camera-state-hint">Zona belum dikalibrasi</span>
@@ -115,7 +121,10 @@ onBeforeUnmount(() => { zoneSession.dispose(); registration.dispose() })
         <dl class="lane-info"><div v-for="lane in zones" :key="lane.id"><dt>{{ lane.laneType === 'outer' ? 'Lajur luar' : 'Lajur dalam' }}</dt><dd>{{ movementLabel(lane.movementRule) }}</dd></div></dl>
         <p v-if="file" class="queue-zone-note">{{ zoneStatus }}</p>
         <p class="queue-zone-note">Zona manual untuk demo. Kalibrasi ulang jika sudut rekaman berubah.</p>
-        <p class="queue-zone-note">Video ini diputar di browser; belum dianalisis AI. Akses file tidak disimpan permanen. Setelah refresh, pilih ulang video.</p>
+        <p v-if="inferenceEnabled" class="queue-zone-note">Snapshot dari video ini dikirim ke FastAPI localhost. Kotak menunjukkan frame sampel terbaru dan disembunyikan jika tertinggal lebih dari 2 detik video. Tidak ada tracking atau penyimpanan gambar.</p>
+        <p v-if="detectionResult" class="queue-zone-note">{{ detectionResult.model_name }} · {{ detectionResult.inference_duration_ms }} ms · {{ detectionResult.note }}</p>
+        <p v-if="detectionResult" class="queue-zone-note">Sesi {{ detectionResult.session_id }} · Frame #{{ detectionResult.frame_sequence }} · Diproses {{ detectionResult.processed_at }}</p>
+        <p class="queue-zone-note">Akses file tidak disimpan permanen. Setelah refresh, pilih ulang video.</p>
       </div>
     </details>
   </article>

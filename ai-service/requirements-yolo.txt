@@ -1,0 +1,18 @@
+# Inference-only dependencies for the pinned iMoonLab fork (installed --no-deps).
+# CPU torch/torchvision are installed separately from download.pytorch.org.
+numpy==1.26.4
+pillow==11.1.0
+matplotlib==3.9.4
+PyYAML==6.0.2
+requests==2.32.3
+scipy==1.13.0
+tqdm==4.67.1
+psutil==5.9.8
+py-cpuinfo==9.0.0
+pandas==2.2.3
+seaborn==0.13.2
+ultralytics-thop==2.0.14
+einops==0.8.1
+huggingface-hub==0.23.2
+safetensors==0.4.3
+timm==1.0.14

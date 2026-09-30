@@ -9,6 +9,7 @@
     "test:phase-recommendation": "node --test src/utils/phaseRecommendation.test.js",
     "test:queue-source": "node --test src/utils/queueSource.test.js",
     "test:map-mode": "node --test src/composables/useMapDisplayMode.test.js",
+    "test:inference": "node --test src/utils/framePipeline.test.js src/composables/useFrameInference.test.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000"

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AppIcon from './AppIcon.vue'
 import SimulationVehicle from './SimulationVehicle.vue'
 import { directionLabel, movementLabel } from '../services/sigapApi.js'
@@ -17,7 +17,7 @@ const approaches = [
   { label: 'Timur', code: 'T', color: 'orange', left: 'Selatan', straight: 'Barat', right: 'Utara', className: 'east' },
 ]
 const simulation = reactive(createSimulation())
-const { mode: displayMode, isSimulation, presentation: modePresentation, selectMode } = useMapDisplayMode()
+const { mode: displayMode, isSimulation, presentation: modePresentation, selectMode } = inject('localInference', null)?.map || useMapDisplayMode()
 const emergencyKind = ref('ambulance')
 const emergencyDirection = ref('west')
 const pathsReady = ref(false)

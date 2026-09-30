@@ -3,6 +3,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.queue_summary import router as queue_summary_router
+from app.detection_routes import router as detection_router
+from app.frame_inference import inference_service
 
 app = FastAPI(
     title="SIGAP AI Service",
@@ -10,6 +12,7 @@ app = FastAPI(
     version="0.1.0-baseline"
 )
 app.include_router(queue_summary_router)
+app.include_router(detection_router)
 
 # Enable CORS for frontend dashboard communication
 app.add_middleware(
@@ -37,15 +40,15 @@ def read_root():
 def health_check():
     """
     Health check endpoint for container health probes and system readiness.
-    Tidak melakukan inferensi YOLOv13. Pembacaan satu frame hanya terjadi jika
-    estimator offline diaktifkan secara eksplisit pada endpoint ringkasan.
+    Liveness terpisah dari readiness model; endpoint ini tidak memuat model.
     """
     return {
         "status": "healthy",
         "service": "SIGAP AI Service (FastAPI)",
         "version": "0.1.0-baseline",
         "target_intersection": TARGET_INTERSECTION,
-        "yolo_status": "STANDBY (Persiapan Tahap Berikutnya)",
+        "yolo_status": inference_service.detector.status,
+        "model_ready": inference_service.detector.status == "READY",
         "tracking_enabled": False,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }

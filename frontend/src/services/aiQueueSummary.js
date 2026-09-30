@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { AI_SERVICE_URL } from './localInference.js'
 
 export const QUEUE_APPROACH_ORDER = ['WEST', 'NORTH', 'EAST', 'SOUTH']
 
@@ -10,7 +11,7 @@ export const QUEUE_APPROACH_LABELS = {
 }
 
 const aiClient = axios.create({
-  baseURL: (import.meta.env?.VITE_AI_SERVICE_URL?.trim() || 'http://localhost:8001').replace(/\/+$/, ''),
+  baseURL: AI_SERVICE_URL,
   timeout: 5000,
   headers: { Accept: 'application/json' },
 })
@@ -55,6 +56,16 @@ export function normalizeQueueSummary(payload) {
       source_type: normalizeText(item.source_type, 'source_type'),
       status: normalizeText(item.status, 'status'),
       note: normalizeText(item.note, 'note'),
+      session_id: item.session_id || null,
+      source_id: item.source_id || null,
+      inference_enabled: item.inference_enabled === true,
+      model_name: item.model_name || null,
+      captured_at: item.captured_at || null,
+      processed_at: item.processed_at || null,
+      expires_at: item.expires_at || null,
+      video_time_seconds: item.video_time_seconds ?? null,
+      inference_duration_ms: item.inference_duration_ms ?? null,
+      stale: item.stale === true,
     }
   })
 
@@ -74,9 +85,10 @@ export function normalizeQueueSummary(payload) {
   }
 }
 
-export async function getLocalVideoQueueSummary(signal) {
+export async function getLocalVideoQueueSummary(signal, mode) {
   const { data } = await aiClient.get('/local-video/queue-summary', {
     signal,
+    params: mode === 'YOLO_LOCAL_REALTIME' ? { mode } : undefined,
     validateStatus: status => status === 200 || status === 503,
   })
   return normalizeQueueSummary(data)

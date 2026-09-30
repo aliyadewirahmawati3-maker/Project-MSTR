@@ -10,6 +10,10 @@
 /cctv-offline/
 /.venv-stage3/
 /artifacts/stage3/
+/artifacts/yolo/
+/models/
+*.pt
+*.onnx
 /tools/cctv/__pycache__/
 /tests/__pycache__/
 

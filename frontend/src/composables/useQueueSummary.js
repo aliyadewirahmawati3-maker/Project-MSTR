@@ -1,4 +1,5 @@
-import { computed, ref } from 'vue'
+import { computed, ref, unref, watch } from 'vue'
+import { safeYoloRow } from '../utils/inferenceStatus.js'
 import { getLocalVideoQueueSummary, QUEUE_APPROACH_LABELS, QUEUE_APPROACH_ORDER } from '../services/aiQueueSummary.js'
 import { getQueueSourcePresentation } from '../utils/queueSource.js'
 
@@ -37,18 +38,25 @@ export function useQueueSummary(options = {}) {
   let pollTimer
   let polling = false
   let disposed = false
+  const now = ref(Date.now())
+  let freshnessTimer
+  const yoloMode = computed(() => unref(options.mode) === 'YOLO_LOCAL_REALTIME')
 
-  const approaches = computed(() => summary.value?.approaches || fallbackApproaches())
+  const approaches = computed(() => {
+    const rows = summary.value?.approaches || fallbackApproaches()
+    if (!yoloMode.value) return rows
+    return rows.map(row => safeYoloRow(row, options.sessions?.[row.camera_id], now.value))
+  })
   const sourceInfo = computed(() => {
     const hasData = approaches.value.some(row => Number.isFinite(row.total_queue) && row.total_queue >= 0 && row.status !== 'WAITING_FOR_DETECTION')
-    const status = error.value ? 'ERROR' : loading.value ? 'LOADING' : hasData ? '' : 'WAITING_FOR_DETECTION'
-    return getQueueSourcePresentation(summary.value?.source_type, status)
+    const status = error.value ? 'ERROR' : !yoloMode.value && loading.value ? 'LOADING' : hasData ? '' : yoloMode.value ? unref(options.inferenceStatus) || 'WAITING_FOR_DETECTION' : 'WAITING_FOR_DETECTION'
+    return getQueueSourcePresentation(yoloMode.value ? 'YOLO_LOCAL_REALTIME' : summary.value?.source_type, status)
   })
   const badge = computed(() => sourceInfo.value.label)
 
   function schedule() {
     clearTimeout(pollTimer)
-    if (polling && !disposed) pollTimer = setTimeout(refresh, intervalMs)
+    if (polling && !disposed) pollTimer = setTimeout(refresh, yoloMode.value ? 2000 : intervalMs)
   }
 
   async function refresh() {
@@ -60,7 +68,7 @@ export function useQueueSummary(options = {}) {
     loading.value = true
     error.value = ''
     try {
-      const result = await service(request.signal)
+      const result = await service(request.signal, unref(options.mode))
       if (request.signal.aborted) return
       summary.value = result
     } catch {
@@ -80,6 +88,7 @@ export function useQueueSummary(options = {}) {
   function start() {
     if (disposed || polling) return
     polling = true
+    freshnessTimer = setInterval(() => { now.value = Date.now() }, 250)
     return refresh()
   }
 
@@ -87,8 +96,19 @@ export function useQueueSummary(options = {}) {
     disposed = true
     polling = false
     clearTimeout(pollTimer)
+    clearInterval(freshnessTimer)
+    stopModeWatch()
     controller?.abort()
   }
+
+  const stopModeWatch = watch(() => unref(options.mode), () => {
+    controller?.abort()
+    controller = null
+    loading.value = false
+    summary.value = null
+    error.value = ''
+    if (polling) void refresh()
+  }, { flush: 'sync' })
 
   return { summary, approaches, loading, error, lastChecked, badge, sourceInfo, refresh, start, dispose }
 }

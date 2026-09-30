@@ -1,3 +1,5 @@
+import { freshYoloResult } from './inferenceStatus.js'
+
 export const RECOMMENDED_PHASES = Object.freeze({
   WEST_EAST: 'WEST_EAST',
   NORTH_SOUTH: 'NORTH_SOUTH',
@@ -24,6 +26,7 @@ function approachesFrom(summary) {
 }
 
 function numericQueue(item) {
+  if (item?.stale || (item?.source_type === 'YOLO_LOCAL_REALTIME' && !freshYoloResult(item))) return null
   return item && typeof item === 'object' && Number.isFinite(item.total_queue) && item.total_queue >= 0
     ? item.total_queue
     : null
@@ -89,7 +92,7 @@ export function recommendPhase(summary) {
       : `Antrean ${westEast ? 'Barat–Timur' : 'Utara–Selatan'} lebih tinggi.`,
     priority_score: priorityScore,
     recommended_green_seconds: recommendedGreenSeconds,
-    status: 'SIMULATOR',
+    status: approaches.every(row => row.source_type === 'YOLO_LOCAL_REALTIME') ? 'DSS_RECOMMENDATION' : 'SIMULATOR',
   }
 }
 

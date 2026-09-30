@@ -122,7 +122,7 @@ Invoke-RestMethod "http://localhost:8000/api/intersections/$intersectionId/syste
 Invoke-RestMethod http://localhost:8001/health
 ```
 
-AI health `http://localhost:8001/health` menunjukkan service HTTP sehat dengan YOLO `STANDBY` dan tracking nonaktif.
+AI health `http://localhost:8001/health` menunjukkan liveness HTTP, sedangkan `model_ready`/`yolo_status` menunjukkan kesiapan model secara terpisah. Tracking tetap nonaktif.
 
 PHPUnit memakai PostgreSQL sesuai `phpunit.xml`; jalankan setelah migration/seeder. Suite menguji kesehatan, kegagalan koneksi database, 404, konfigurasi dari semua endpoint simpang, dan seeder berulang. Test yang menulis data memakai transaksi yang di-rollback, tanpa `migrate:fresh`. Gunakan database development prototype ini; test baseline mengharapkan kamera belum dikonfigurasi dan tabel deteksi/keputusan kosong.
 
@@ -153,3 +153,9 @@ node --test src/composables/useDashboardConfiguration.test.js src/simulation/int
 ```
 
 Tes integrasi menggunakan respons Laravel nyata dan menyuntikkan kegagalan hanya pada klien pengujian. Untuk uji browser manual, buka DevTools → Network request blocking, blokir `*localhost:8000/api/*`, lalu klik **Refresh Status**. Pesan offline harus muncul dan simulator tetap dapat dijalankan. Hapus pemblokiran lalu klik refresh untuk memulihkan status online. Tidak perlu mematikan backend atau mengubah database.
+
+## YOLOv13 pada video lokal
+
+Pipeline snapshot YOLOv13-N pretrained tersedia melalui pilihan **YOLO lokal** pada panel peta. Snapshot diambil dari video browser dan diproses FastAPI localhost, tanpa upload MP4, training, tracking, atau kontrol ATCS. Simulasi visual tetap menjadi default. Nilai antrean adalah jumlah kendaraan di zona pada frame sampel terbaru; data kosong/gagal/kedaluwarsa tetap `null`.
+
+Ikuti [panduan instalasi, kontrak sesi, kalibrasi, test, dan bukti inference nyata](docs/yolov13-local-inference.md). Weights resmi diunduh dengan `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/setup-yolov13.ps1` ke folder ignored `models/`. Frontend tetap dijalankan dari host memakai `npm.cmd`.

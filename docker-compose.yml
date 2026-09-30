@@ -73,7 +73,7 @@ services:
     container_name: sigap-ai-service
     restart: unless-stopped
     ports:
-      - "${AI_SERVICE_PORT:-8001}:8001"
+      - "127.0.0.1:${AI_SERVICE_PORT:-8001}:8001"
     environment:
       APP_ENV: development
       PORT: 8001
@@ -82,8 +82,15 @@ services:
       SIGAP_QUEUE_ZONES_PATH: /config/cctv/queue_zones.json
       SIGAP_QUEUE_ESTIMATION_MODE: ${SIGAP_QUEUE_ESTIMATION_MODE:-DISABLED}
       SIGAP_QUEUE_ESTIMATES_JSON: ${SIGAP_QUEUE_ESTIMATES_JSON:-}
+      SIGAP_YOLO_WEIGHTS: /models/yolov13/yolov13n.pt
+      SIGAP_YOLO_DEVICE: ${SIGAP_YOLO_DEVICE:-cpu}
+      SIGAP_YOLO_CONFIDENCE: ${SIGAP_YOLO_CONFIDENCE:-0.25}
+      SIGAP_YOLO_IMAGE_SIZE: ${SIGAP_YOLO_IMAGE_SIZE:-640}
+      SIGAP_YOLO_MIN_INTERVAL_SECONDS: ${SIGAP_YOLO_MIN_INTERVAL_SECONDS:-1.5}
+      SIGAP_YOLO_MAX_AGE_SECONDS: ${SIGAP_YOLO_MAX_AGE_SECONDS:-10}
     volumes:
       - ./ai-service:/app
+      - ./models:/models:ro
       - type: bind
         source: ./cctv-offline
         target: /data/cctv-offline

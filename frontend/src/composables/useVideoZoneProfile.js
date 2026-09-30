@@ -4,11 +4,12 @@ import { fingerprintVideo, profileIssue } from '../utils/zoneProfiles.js'
 
 export function useVideoZoneProfile(registration, { fingerprint = fingerprintVideo } = {}) {
   const identity = shallowRef(null)
+  const sourceHash = ref('')
   const identification = ref('empty')
   const declaredCamera = ref('')
   const selectedProfile = ref('')
   const sameViewConfirmed = ref(false)
-  const analysisResult = shallowRef(null) // No analysis is implemented; never synthesize results.
+  const analysisResult = shallowRef(null)
   const inputCameraCode = computed(() => identity.value?.camera_code || declaredCamera.value)
   const selected = computed(() => zoneProfiles.find(p => p.profile_id === selectedProfile.value) || null)
   const issue = computed(() => profileIssue(selected.value, inputCameraCode.value, registration.metadata.value, aspectRatioTolerance))
@@ -21,6 +22,7 @@ export function useVideoZoneProfile(registration, { fingerprint = fingerprintVid
 
   function reset() {
     identity.value = null
+    sourceHash.value = ''
     identification.value = 'empty'
     declaredCamera.value = ''
     selectedProfile.value = ''
@@ -38,6 +40,7 @@ export function useVideoZoneProfile(registration, { fingerprint = fingerprintVid
     try {
       const hash = await fingerprint(file)
       if (cancelled || !registration.isCurrent(version)) return
+      sourceHash.value = hash
       identity.value = sourceIdentities.find(item => item.source_sha256 === hash && item.viewpoint_confirmed === true) || null
       selectedProfile.value = identity.value?.profile_id || ''
       identification.value = identity.value ? 'registered' : 'unknown'
@@ -60,6 +63,6 @@ export function useVideoZoneProfile(registration, { fingerprint = fingerprintVid
   }
   function confirmSameView(value) { sameViewConfirmed.value = value === true; analysisResult.value = null }
   function dispose() { stopReset(); stopIdentify(); stopResults(); reset() }
-  return { identity, identification, inputCameraCode, selectedProfile, sameViewConfirmed, analysisResult,
+  return { identity, sourceHash, identification, inputCameraCode, selectedProfile, sameViewConfirmed, analysisResult,
     activeProfile, activeZones, canAnalyzeZones, issue, status, chooseCamera, chooseProfile, confirmSameView, dispose }
 }

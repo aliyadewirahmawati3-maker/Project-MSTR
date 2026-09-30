@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { nextTick } from 'vue'
+import { nextTick, reactive, ref } from 'vue'
 import { formatQueueValue, laneQueueLabel, normalizeQueueSummary } from '../services/aiQueueSummary.js'
 import { useQueueSummary } from './useQueueSummary.js'
 
@@ -132,4 +132,39 @@ test('composable falls back to four safe directions when AI service is unavailab
   assert.deepEqual(queues.approaches.value.map(item => item.approach_code), ['WEST', 'NORTH', 'EAST', 'SOUTH'])
   assert.equal(queues.approaches.value.every(item => item.total_queue === null), true)
   queues.dispose()
+})
+
+test('YOLO summary requires the current source session; pause and expiry remove recommendation inputs', async t => {
+  const mode = ref('YOLO_LOCAL_REALTIME'), sessions = reactive({})
+  const rows = ['WEST','NORTH','EAST','SOUTH'].map(code => approach(code, {
+    source_type: 'YOLO_LOCAL_REALTIME', status: 'DETECTION_READY', inference_enabled: true, stale: false,
+    outer_lane_queue: 1, inner_lane_queue: 1, total_queue: 2, session_id: code, source_id: code,
+    expires_at: new Date(Date.now() + 10000).toISOString(),
+  }))
+  const queues = useQueueSummary({ mode, sessions, service: async () => normalizeQueueSummary({ ...payload(rows), source_type: 'YOLO_LOCAL_REALTIME' }) })
+  t.after(queues.dispose)
+  await queues.refresh()
+  assert.ok(queues.approaches.value.every(row => row.total_queue === null))
+  sessions['CAM-W-01'] = { session_id: 'WEST', source_id: 'WEST' }
+  assert.equal(queues.approaches.value[0].total_queue, 2)
+  delete sessions['CAM-W-01']
+  assert.equal(queues.approaches.value[0].total_queue, null)
+  sessions['CAM-W-01'] = { session_id: 'NEW', source_id: 'NEW' }
+  assert.equal(queues.approaches.value[0].total_queue, null)
+  sessions['CAM-N-01'] = { session_id: 'NORTH', source_id: 'NORTH' }
+  queues.summary.value.approaches[1].expires_at = '2000-01-01T00:00:00Z'
+  assert.equal(queues.approaches.value[1].total_queue, null)
+})
+
+test('late simulator polling cannot replace YOLO summary after mode selection', async t => {
+  const mode = ref('SIMULATION_VISUAL')
+  let release
+  const queues = useQueueSummary({ mode, service: () => new Promise(resolve => { release = resolve }) })
+  t.after(queues.dispose)
+  const request = queues.refresh()
+  mode.value = 'YOLO_LOCAL_REALTIME'
+  release(normalizeQueueSummary({ ...payload(), source_type: 'SIMULATOR' }))
+  await request
+  assert.equal(queues.summary.value, null)
+  assert.ok(queues.approaches.value.every(row => row.total_queue === null))
 })

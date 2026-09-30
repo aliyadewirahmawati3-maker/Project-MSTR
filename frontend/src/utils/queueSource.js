@@ -1,3 +1,4 @@
+import { inferenceLabel, INFERENCE_LABELS } from './inferenceStatus.js'
 const waiting = { label: 'Menunggu', variant: 'neutral', help: 'Menunggu deteksi', note: '' }
 const offline = { label: 'AI offline', variant: 'danger', help: 'Service AI tidak terhubung.', note: '' }
 const sources = {
@@ -13,6 +14,7 @@ const sources = {
 export function getQueueSourcePresentation(sourceType, status) {
   if (['ERROR', 'OFFLINE', 'AI_OFFLINE'].includes(status) || ['ERROR', 'OFFLINE', 'AI_OFFLINE'].includes(sourceType)) return { ...offline }
   if (status === 'LOADING') return { label: 'Memuat', variant: 'neutral', help: 'Memuat ringkasan antrean…', note: '' }
+  if (sourceType === 'YOLO_LOCAL_REALTIME' && INFERENCE_LABELS[status] && status !== 'DETECTION_READY' && status !== 'WAITING_FOR_DETECTION') return { label: inferenceLabel(status), variant: 'neutral', help: 'Snapshot video lokal · bukan CCTV live ATCS.', note: '' }
   // A configured YOLO/simulator mode without results must not look active.
   if (status === 'WAITING_FOR_DETECTION' || status === 'WAITING_FOR_DATA') return { ...waiting }
   return { ...(sources[sourceType] || waiting) }

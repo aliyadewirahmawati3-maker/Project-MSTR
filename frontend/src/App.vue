@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
+import { useLocalInference } from './composables/useLocalInference.js'
 import { useDashboardConfiguration } from './composables/useDashboardConfiguration.js'
 import { useQueueSummary } from './composables/useQueueSummary.js'
 import { formatQueueValue } from './services/aiQueueSummary.js'
@@ -21,7 +22,9 @@ const menus = [
   { label: 'Pengaturan Simpang', icon: 'settings' },
 ]
 const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
-const { approaches: queueApproaches, loading: queueLoading, sourceInfo: queueSource, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary()
+const localInference = useLocalInference()
+provide('localInference', localInference)
+const { approaches: queueApproaches, loading: queueLoading, sourceInfo: queueSource, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary({ mode: localInference.map.mode, sessions: localInference.sessions, inferenceStatus: localInference.status })
 const phaseRecommendation = computed(() => recommendPhase(queueApproaches.value))
 const awaitingQueues = computed(() => phaseRecommendation.value.recommended_phase === 'WAITING_FOR_DATA')
 const recommendationReason = computed(() => awaitingQueues.value
