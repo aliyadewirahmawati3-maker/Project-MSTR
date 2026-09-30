@@ -123,13 +123,16 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
 .badge-neutral { background: #f3f5f8; color: #7b899c; border: 1px solid #e9edf3; }
 .badge-blue { background: #edf4ff; color: #3879ce; }
 .queue-card .summary-heading { margin-bottom: 11px; }
+.queue-summary-note { margin-bottom: 9px; color: #748399; font-size: 10px; line-height: 1.5; }
 .queue-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
 .queue-metric > div:first-child { display: flex; align-items: center; justify-content: space-between; }
 .queue-metric > div > span { font-size: 11px; color: #66768c; }
 .queue-metric strong { font-size: 24px; line-height: 1; color: #798a9e; font-weight: 400; }
 .queue-indicator { height: 12px; display: flex; gap: 3px; margin: 8px 0; }
 .queue-indicator i { flex: 1; border-radius: 2px; background: #eaf0f7; }
+.queue-indicator i.active { background: #8fb8ea; }
 .queue-metric p { font-size: 9px; color: #8a98aa; line-height: 1.5; }
+.queue-source-line { color: #68788d; overflow-wrap: anywhere; }
 .main-grid { display: grid; grid-template-columns: minmax(0, 1.86fr) minmax(0, 1fr); gap: 22px; margin-bottom: 22px; align-items: stretch; }
 .card-heading { min-height: 65px; padding: 16px 21px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--line); }
 .card-heading p { font-size: 10px; color: #8a97a8; margin-top: 4px; line-height: 1.5; }

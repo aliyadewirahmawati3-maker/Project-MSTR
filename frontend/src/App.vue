@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useDashboardConfiguration } from './composables/useDashboardConfiguration.js'
-import { directionLabel } from './services/sigapApi.js'
+import { useQueueSummary } from './composables/useQueueSummary.js'
+import { formatQueueValue, laneQueueLabel } from './services/aiQueueSummary.js'
 import AppIcon from './components/AppIcon.vue'
 import IntersectionMap from './components/IntersectionMap.vue'
 import CctvMonitoring from './components/CctvMonitoring.vue'
@@ -19,7 +20,7 @@ const menus = [
   { label: 'Pengaturan Simpang', icon: 'settings' },
 ]
 const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
-const directions = computed(() => configuration.value?.approaches.map(approach => directionLabel(approach.direction)) || Array(4).fill('—'))
+const { approaches: queueApproaches, loading: queueLoading, error: queueError, badge: queueBadge, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary()
 const systemMode = computed(() => configurationFresh.value ? configuration.value.systemStatus.current_mode : 'Standby')
 const aiStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_ai_healthy === true ? 'Sehat' : 'Standby')
 const cctvStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_cctv_healthy === true ? 'Sehat (API)' : 'Standby')
@@ -49,7 +50,7 @@ function notify(message) {
 }
 
 async function checkHealth(manual = false) {
-  await refresh()
+  await Promise.all([refresh(), refreshQueueSummary()])
   if (manual) notify(statusMessage.value)
 }
 async function navigate(menu) {
@@ -88,12 +89,14 @@ onMounted(() => {
   syncMobileLayout()
   mobileQuery.addEventListener('change', syncMobileLayout)
   start()
+  startQueueSummary()
   document.addEventListener('click', closeOverlays)
   document.addEventListener('keydown', handleEscape)
 })
 onBeforeUnmount(() => {
   mobileQuery?.removeEventListener('change', syncMobileLayout)
   dispose()
+  disposeQueueSummary()
   clearTimeout(toastTimer)
   document.removeEventListener('click', closeOverlays)
   document.removeEventListener('keydown', handleEscape)
@@ -149,7 +152,20 @@ onBeforeUnmount(() => {
               <div class="operation-metric"><span class="icon-tile amber"><AppIcon name="pulse" /></span><div><span class="metric-label">Kesehatan layanan</span><strong>{{ serviceStatus }}</strong><span class="metric-note" role="status" aria-live="polite">{{ statusMessage }}</span></div></div>
             </div>
           </section>
-          <section class="card queue-card" aria-labelledby="queue-title"><div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span class="badge badge-neutral">Menunggu data</span></div><div class="queue-metrics"><div v-for="(direction, index) in directions" :key="index" class="queue-metric"><div><span>{{ direction }}</span><strong>—</strong></div><div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment"></i></div><p>Menunggu data CCTV</p></div></div></section>
+          <section class="card queue-card" aria-labelledby="queue-title">
+            <div class="summary-heading"><h2 id="queue-title">Ringkasan Antrean</h2><span class="badge badge-neutral">{{ queueBadge }}</span></div>
+            <p v-if="queueLoading" class="queue-summary-note" role="status">Memuat ringkasan antrean dari AI service...</p>
+            <p v-else-if="queueError" class="queue-summary-note" role="status">{{ queueError }}</p>
+            <div class="queue-metrics" :aria-busy="queueLoading">
+              <div v-for="queue in queueApproaches" :key="queue.approach_code" class="queue-metric" :title="queue.note">
+                <div><span>{{ queue.approach_name }}</span><strong>{{ formatQueueValue(queue.total_queue) }}</strong></div>
+                <div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment" :class="{ active: Number.isFinite(queue.total_queue) && segment <= Math.min(12, queue.total_queue) }"></i></div>
+                <p>Luar: {{ laneQueueLabel(queue.outer_lane_queue) }}</p>
+                <p>Dalam: {{ laneQueueLabel(queue.inner_lane_queue) }}</p>
+                <p class="queue-source-line">{{ queue.source_type }} / {{ queue.status }}</p>
+              </div>
+            </div>
+          </section>
         </div>
 
         <div class="main-grid">

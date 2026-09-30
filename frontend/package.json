@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:local-video": "node --test src/composables/useLocalVideo.test.js",
+    "test:local-video": "node --test src/composables/useLocalVideo.test.js src/composables/useQueueSummary.test.js",
     "test:zones": "node --test src/config/queueZones.test.js src/composables/useVideoZoneProfile.test.js",
     "dev": "vite",
     "build": "vite build",
