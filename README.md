@@ -4,10 +4,12 @@ Prototype Decision Support System (DSS) untuk simpang Jl. Ibrahim Adjie sisi Mal
 
 Tahap 1 mengaktifkan Laravel 12, PostgreSQL 16, dan FastAPI dalam status standby. Tahap 2 menghubungkan dashboard Vue/Vite ke konfigurasi Laravel API; simulator visual tetap mandiri.
 
+Tahap 3 menyiapkan empat rekaman CCTV lokal/offline, konfigurasi delapan polygon zona antrean, dan alat validasi/preview mandiri. Panduan, inventaris video, serta batas interpretasi zona tersedia di [docs/stage3-cctv.md](docs/stage3-cctv.md).
+
 ## Batasan sistem
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.
-- Empat kamera merupakan konfigurasi awal: `UNCONFIGURED`, `stream_url: null`. Tidak ada video/CCTV nyata yang diproses.
+- Empat kamera pada backend tetap merupakan konfigurasi awal: `UNCONFIGURED`, `stream_url: null`. Alat Tahap 3 membaca rekaman lokal hanya untuk inspeksi metadata dan preview zona; tidak ada CCTV live atau pemrosesan video oleh service aplikasi.
 - AI service hanya menyediakan endpoint kesehatan; inferensi belum aktif. Container sehat tidak berarti deteksi kendaraan aktif.
 - Tidak ada YOLO, vehicle tracking/tracking ID, OCR plat nomor, pengenalan wajah, algoritma heuristik keputusan, atau pengendalian lampu fisik.
 - `traffic_measurements` dan `heuristic_decisions` tetap kosong. Data simulator tidak diklaim sebagai hasil deteksi nyata.

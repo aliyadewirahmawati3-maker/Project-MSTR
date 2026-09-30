@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "intersection_code": "BDG-IBR-ADJ-01",
+  "source_kind": "LOCAL_OFFLINE_RECORDING",
+  "mapping_basis": "USER_ASSIGNED_SCENARIO_NOT_VERIFIED_GEOGRAPHIC_DIRECTIONS",
+  "coordinate_system": {
+    "space": "normalized",
+    "origin": "top_left",
+    "x_axis": "right",
+    "y_axis": "down",
+    "pixel_conversion": "x = round(u * (width - 1)); y = round(v * (height - 1))"
+  },
+  "annotation_method": "MANUAL_FROM_DECODED_FRAMES",
+  "annotation_notes": "ROI pada bidang jalan untuk persiapan skenario. Batas manual, bukan kalibrasi fisik atau hasil deteksi. Tidak ada garis henti terverifikasi. Outer dipilih di sisi kanan gambar untuk arus mendekati kamera (sisi kiri pengemudi). Aturan gerakan merupakan label proyek, bukan pembuktian aturan belok lokasi rekaman.",
+  "cameras": [
+    {
+      "camera_code": "CAM-W-01",
+      "direction": "WEST",
+      "direction_label": "BARAT",
+      "video_env": "SIGAP_VIDEO_WEST",
+      "source_filename": "CCTV SIANG JL NORMAL_BARAT.mp4",
+      "source_sha256": "177153c23c3273e1c62f361956294cd300ebb37f95cb216cf9e28415fceef53c",
+      "scenario": "NORMAL",
+      "expected_metadata": {"width": 1920, "height": 1080, "fps": 30, "frame_count": 812},
+      "reference_frame_seconds": 5,
+      "inspected_frame_seconds": [5, 10],
+      "geometry_notes": "Bidang jalan antara y=0.43 dan 0.72. Pemisah mengikuti marka putus-putus; outer menuju tepi kuning kanan, inner menuju tepi kiri. Trotoar, parkir kanan, serta teks bawah dikeluarkan.",
+      "zones": [
+        {"zone_id": "CAM-W-01-outer", "lane_type": "outer", "movement_rules": "LEFT_OR_STRAIGHT", "polygon": [[0.455, 0.43], [0.626, 0.43], [0.58, 0.72], [0.277, 0.72]]},
+        {"zone_id": "CAM-W-01-inner", "lane_type": "inner", "movement_rules": "STRAIGHT_OR_RIGHT", "polygon": [[0.29, 0.43], [0.455, 0.43], [0.277, 0.72], [0.035, 0.72]]}
+      ]
+    },
+    {
+      "camera_code": "CAM-N-01",
+      "direction": "NORTH",
+      "direction_label": "UTARA",
+      "video_env": "SIGAP_VIDEO_NORTH",
+      "source_filename": "CCTV SIANG JL NORMAL_UTARA.mp4",
+      "source_sha256": "97e348e96548fc7b9871d146e408a68e70cb07434bfd5cb6675cfddc40509375",
+      "scenario": "NORMAL",
+      "expected_metadata": {"width": 1920, "height": 1080, "fps": 30, "frame_count": 750},
+      "reference_frame_seconds": 10,
+      "inspected_frame_seconds": [5, 10],
+      "geometry_notes": "Marka diagonal menuju kanan bawah menjadi pemisah. Outer di kanan marka, inner di kiri hingga sebelum trotoar kiri. ROI dibatasi y=0.46..0.80 untuk menghindari akses samping dan teks bawah. Frame 10 s dipilih karena bidang jalan lebih terbuka daripada 5 s. Sudut pandang hampir sama dengan sumber SELATAN.",
+      "zones": [
+        {"zone_id": "CAM-N-01-outer", "lane_type": "outer", "movement_rules": "LEFT_OR_STRAIGHT", "polygon": [[0.439, 0.46], [0.78, 0.46], [0.966, 0.80], [0.757, 0.80]]},
+        {"zone_id": "CAM-N-01-inner", "lane_type": "inner", "movement_rules": "STRAIGHT_OR_RIGHT", "polygon": [[0.215, 0.46], [0.439, 0.46], [0.757, 0.80], [0.282, 0.80]]}
+      ]
+    },
+    {
+      "camera_code": "CAM-E-01",
+      "direction": "EAST",
+      "direction_label": "TIMUR",
+      "video_env": "SIGAP_VIDEO_EAST",
+      "source_filename": "CCTV SIANG JL PADAT AMBULANS_TIMUR.mp4",
+      "source_sha256": "e4d906dd0af08d54296e209d4145faa059a68b56c45496fa5f43e71a27a4a278",
+      "scenario": "PADAT_AMBULANS_EVP_VISUAL_ONLY",
+      "expected_metadata": {"width": 1920, "height": 1080, "fps": 30, "frame_count": 752},
+      "reference_frame_seconds": 10,
+      "inspected_frame_seconds": [5, 10],
+      "geometry_notes": "Dua koridor paling kanan pada jalur mendekati kamera. Outer dekat tepi vegetasi kanan, inner koridor di sebelah kirinya. Koridor tambahan dekat median kiri tidak dicakup. Permukaan/marka tertutup arus padat, sehingga pemisah merupakan pendekatan manual berdasarkan perspektif jalan pada frame 5 dan 10 s. Skenario ambulans/EVP hanya label visual, tidak mengaktifkan fitur EVP.",
+      "zones": [
+        {"zone_id": "CAM-E-01-outer", "lane_type": "outer", "movement_rules": "LEFT_OR_STRAIGHT", "polygon": [[0.517, 0.47], [0.67, 0.47], [0.515, 0.86], [0.323, 0.86]]},
+        {"zone_id": "CAM-E-01-inner", "lane_type": "inner", "movement_rules": "STRAIGHT_OR_RIGHT", "polygon": [[0.413, 0.47], [0.517, 0.47], [0.323, 0.86], [0.145, 0.86]]}
+      ]
+    },
+    {
+      "camera_code": "CAM-S-01",
+      "direction": "SOUTH",
+      "direction_label": "SELATAN",
+      "video_env": "SIGAP_VIDEO_SOUTH",
+      "source_filename": "CCTV SIANG JL NORMAL_SELATAN.mp4",
+      "source_sha256": "fa580056f0db43c8c83229edcc05eae97203572f1d0b7dc1dddb95eb69617977",
+      "scenario": "NORMAL",
+      "expected_metadata": {"width": 1920, "height": 1080, "fps": 30, "frame_count": 751},
+      "reference_frame_seconds": 5,
+      "inspected_frame_seconds": [5, 10],
+      "geometry_notes": "Diperiksa pada sumber SELATAN sendiri. Marka diagonal menjadi pemisah dua ROI dengan outer di kanan gambar. Tepi kiri mengikuti bidang aspal sebelum trotoar; akses samping kanan atas tidak dicakup. Geometri mirip UTARA karena sudut pandang sumber hampir sama, bukan bukti arah geografis berbeda.",
+      "zones": [
+        {"zone_id": "CAM-S-01-outer", "lane_type": "outer", "movement_rules": "LEFT_OR_STRAIGHT", "polygon": [[0.435, 0.46], [0.78, 0.46], [0.966, 0.80], [0.755, 0.80]]},
+        {"zone_id": "CAM-S-01-inner", "lane_type": "inner", "movement_rules": "STRAIGHT_OR_RIGHT", "polygon": [[0.211, 0.46], [0.435, 0.46], [0.755, 0.80], [0.274, 0.80]]}
+      ]
+    }
+  ]
+}

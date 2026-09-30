@@ -5,6 +5,13 @@
 .env.local
 .env.*.local
 
+# Tahap 3: sumber video, environment alat, dan hasil inspeksi lokal
+*.[mM][pP]4
+/.venv-stage3/
+/artifacts/stage3/
+/tools/cctv/__pycache__/
+/tests/__pycache__/
+
 # Node.js / Frontend
 frontend/node_modules/
 frontend/dist/
