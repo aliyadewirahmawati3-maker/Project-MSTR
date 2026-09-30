@@ -43,7 +43,7 @@ Setiap sumber diperiksa secara visual pada detik 5 dan 10. Polygon diletakkan pa
 
 Environment menggunakan `SIGAP_VIDEO_WEST`, `SIGAP_VIDEO_NORTH`, `SIGAP_VIDEO_EAST`, dan `SIGAP_VIDEO_SOUTH`. Isi masing-masing dengan path absolut MP4 di luar repository. Parser membaca file yang ditentukan `--env-file`; environment proses tidak menimpanya. Kutip tunggal/ganda didukung, backslash dibaca literal, tidak ada ekspansi variabel atau perintah shell. URL stream, path relatif, dan path jaringan UNC ditolak.
 
-Repository tidak menyimpan path pribadi. MP4 tetap di folder sumber: tidak disalin, dipindahkan, ditambahkan ke Git, atau diunggah. `.gitignore` juga mengecualikan `*.mp4` (termasuk variasi kapital), `.venv-stage3/`, hasil `artifacts/stage3/`, dan cache Python alat/tes.
+Repository tidak menyimpan path pribadi. Pada Tahap 3, MP4 tetap di folder sumber tanpa disalin, dipindahkan, ditambahkan ke Git, atau diunggah. `.gitignore` juga mengecualikan `*.mp4` (termasuk variasi kapital), `.venv-stage3/`, hasil `artifacts/stage3/`, dan cache Python alat/tes. Tahap 3.5 menambahkan penyalinan lokal yang secara khusus diminta untuk pemutaran browser ke folder ignored `frontend/public/cctv-local/`; lihat [panduan Tahap 3.5](stage35-cctv-frontend.md). Sumber asli tetap di tempatnya.
 
 JSON menggunakan `schema_version: 1` dan menyimpan tepat empat kamera dengan masing-masing dua zona:
 

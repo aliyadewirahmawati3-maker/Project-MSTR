@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
-        <CctvMonitoring :status-fresh="configurationFresh" :cameras="configuration?.cameras || []" :approaches="configuration?.approaches || []" />
+        <CctvMonitoring />
         <footer class="page-footer"><p>SIGAP — Prototype Decision Support System untuk ATCS Bandung Command Center</p><span><i class="status-dot blue"></i>Lingkungan simulator</span></footer>
       </div>
     </main>

@@ -6,6 +6,8 @@ Tahap 1 mengaktifkan Laravel 12, PostgreSQL 16, dan FastAPI dalam status standby
 
 Tahap 3 menyiapkan empat rekaman CCTV lokal/offline, konfigurasi delapan polygon zona antrean, dan alat validasi/preview mandiri. Panduan, inventaris video, serta batas interpretasi zona tersedia di [docs/stage3-cctv.md](docs/stage3-cctv.md).
 
+Tahap 3.5 menampilkan empat rekaman tersebut pada kartu CCTV dashboard menggunakan pemutar HTML5. Dari root proyek, jalankan `npm.cmd --prefix frontend run cctv:prepare`, kemudian `npm.cmd --prefix frontend run dev -- --host 127.0.0.1`. Buka `http://127.0.0.1:3000/#live-monitoring`. Panduan lengkap tersedia di [docs/stage35-cctv-frontend.md](docs/stage35-cctv-frontend.md).
+
 ## Batasan sistem
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.
@@ -135,7 +137,7 @@ Dashboard membaca tujuh endpoint GET pada tabel API di atas. Kode `BDG-IBR-ADJ-0
 
 Tombol **Refresh Status** mengambil ulang seluruh konfigurasi. Polling health berjalan 15 detik setelah request sebelumnya selesai, tanpa request tumpang tindih; timer dan request dibatalkan saat dashboard ditutup. Jika health gagal, konfigurasi terakhir tetap tersedia, sedangkan mode, fase aktif, AI, dan kamera diberi label standby/belum terverifikasi. Polling berikutnya mencoba memuat ulang konfigurasi agar dapat pulih; refresh manual juga tersedia.
 
-Nama/durasi fase dari API merupakan konfigurasi prototype. Nilai tersebut tidak mengubah timing, geometri, animasi kendaraan, atau lampu simulator lokal. `UNCONFIGURED`, AI/CCTV `false`, dan stream kosong tetap ditampilkan jujur tanpa deteksi atau stream palsu.
+Nama/durasi fase dari API merupakan konfigurasi prototype. Nilai tersebut tidak mengubah timing, geometri, animasi kendaraan, atau lampu simulator lokal. `UNCONFIGURED`, AI/CCTV `false`, dan stream kosong tetap merupakan status API. Mulai Tahap 3.5, kartu CCTV secara terpisah menampilkan rekaman lokal/offline dengan status pemutaran browser, tanpa mengubah status kamera fisik pada API.
 
 Verifikasi (backend lokal perlu aktif untuk tes integrasi):
 

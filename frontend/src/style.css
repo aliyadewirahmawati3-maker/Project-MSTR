@@ -203,6 +203,13 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
 .camera-heading h3 svg { color: #8495ab; }
 .camera-number { font-size: 10px; color: #a9b5c3; letter-spacing: 1px; }
 .camera-frame { width: 100%; aspect-ratio: 16 / 9; background: #202833; border: 1px solid #202936; border-radius: 4px; position: relative; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+.camera-video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.camera-offline-badge { z-index: 1; pointer-events: none; }
+.camera-playback-status { margin-top: 7px; color: #738399; font-size: 10px; line-height: 1.5; }
+.camera-local-help { margin-top: 8px; padding: 10px; background: #f3f6fa; border: 1px solid var(--line); border-radius: 4px; font-size: 10px; color: #62748a; line-height: 1.6; }
+.camera-local-help code { display: block; margin: 6px 0; overflow-wrap: anywhere; user-select: all; }
+.camera-local-help button { margin-top: 6px; padding: 5px 9px; background: #e4edf8; color: #32669e; border-radius: 3px; font-size: 10px; }
+.camera-frame .frame-corner { pointer-events: none; }
 .camera-standby { position: absolute; right: 10px; top: 10px; font-size: 8px; color: #afb9c5; background: #303945; border: 1px solid #414a56; border-radius: 3px; padding: 3px 6px; display: inline-flex; align-items: center; gap: 5px; }
 .camera-standby .status-dot { width: 4px; height: 4px; background: #9ba5b3; }
 .camera-empty { text-align: center; padding: 28px 10px 15px; color: #778391; }

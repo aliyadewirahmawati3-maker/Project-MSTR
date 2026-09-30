@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "cctv:prepare": "py -3.13 ../tools/cctv/prepare_frontend.py",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000"
@@ -17,4 +18,3 @@
     "vite": "^5.1.6"
   }
 }
-
