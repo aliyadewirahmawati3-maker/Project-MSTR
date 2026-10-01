@@ -168,3 +168,38 @@ test('late simulator polling cannot replace YOLO summary after mode selection', 
   assert.equal(queues.summary.value, null)
   assert.ok(queues.approaches.value.every(row => row.total_queue === null))
 })
+
+test('frame results immediately update queues; late polls cannot regress or resurrect data', async t => {
+  const mode = ref('YOLO_LOCAL_REALTIME'), sessions = reactive({}), results = reactive({})
+  let reply = payload()
+  const queues = useQueueSummary({ mode, sessions, results, service: async () => {
+    if (reply instanceof Error) throw reply
+    return normalizeQueueSummary(reply)
+  } })
+  t.after(queues.dispose)
+  const frame = approach('WEST', { source_type: 'YOLO_LOCAL_REALTIME', status: 'DETECTION_READY', inference_enabled: true,
+    stale: false, outer_lane_queue: 3, inner_lane_queue: 1, total_queue: 4,
+    session_id: 'active', source_id: 'video', frame_sequence: 2, expires_at: new Date(Date.now()+10000).toISOString() })
+  sessions['CAM-W-01'] = { session_id: 'active', source_id: 'video' }
+  results['CAM-W-01'] = frame
+  assert.equal(queues.approaches.value[0].total_queue, 4) // No polling yet.
+  reply = payload([approach('WEST', { ...frame, frame_sequence: 1, total_queue: 1 }), ...['NORTH','EAST','SOUTH'].map(code => approach(code))])
+  await queues.refresh()
+  assert.equal(queues.approaches.value[0].total_queue, 4)
+  results['CAM-W-01'] = { ...frame, frame_sequence: 3, status: 'INFERENCE_ERROR', total_queue: null }
+  assert.equal(queues.approaches.value[0].total_queue, null)
+  results['CAM-W-01'] = { ...frame, frame_sequence: 4 }
+  reply = new Error('summary request failed')
+  await queues.refresh()
+  assert.equal(queues.approaches.value[0].total_queue, 4)
+  assert.equal(queues.badge.value, 'YOLO lokal')
+  results['CAM-W-01'].expires_at = '2000-01-01T00:00:00Z'
+  assert.equal(queues.approaches.value[0].total_queue, null)
+  assert.equal(queues.approaches.value[0].status, 'STALE')
+  results['CAM-W-01'] = frame
+  delete sessions['CAM-W-01']
+  assert.equal(queues.approaches.value[0].total_queue, null)
+  assert.equal(queues.approaches.value[0].status, 'WAITING_FOR_DETECTION')
+  sessions['CAM-W-01'] = { session_id: 'new', source_id: 'new-video' }
+  assert.equal(queues.approaches.value[0].total_queue, null)
+})

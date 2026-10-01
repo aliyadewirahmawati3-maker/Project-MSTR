@@ -10,10 +10,16 @@ export function useFrameInference(videoRef, registration, zones, camera, context
   const cameraId = computed(() => zones.inputCameraCode.value || camera.camera_code)
   const enabled = computed(() => context.map.mode.value === 'YOLO_LOCAL_REALTIME')
   function changed(update) {
-    if (lastCamera && context.sessions[lastCamera]?.session_id === lastSession) delete context.sessions[lastCamera]
+    if (lastCamera && context.sessions[lastCamera]?.session_id === lastSession) {
+      delete context.sessions[lastCamera]
+      delete context.results[lastCamera]
+    }
     lastCamera = cameraId.value
     lastSession = update.session?.session_id
-    if (update.session && !['AI_OFFLINE', 'INFERENCE_ERROR', 'INVALID_FRAME'].includes(update.status)) context.sessions[lastCamera] = update.session
+    if (update.session && !['AI_OFFLINE', 'INFERENCE_ERROR', 'INVALID_FRAME'].includes(update.status)) {
+      context.sessions[lastCamera] = update.session
+      if (update.result) context.results[lastCamera] = update.result
+    }
     result.value = update.result
     status.value = update.status
     context.states[camera.camera_code] = update.status
@@ -33,7 +39,12 @@ export function useFrameInference(videoRef, registration, zones, camera, context
     }
     const events = ['playing', 'pause', 'ended', 'waiting', 'seeking', 'seeked', 'error']
     for (const name of events) video.addEventListener(name, sync)
-    const updateTime = () => { videoTime.value = video.currentTime }
+    const updateTime = () => {
+      // Native looping can jump backwards without firing a seeking event.
+      const looped = video.currentTime < videoTime.value - 0.1
+      videoTime.value = video.currentTime
+      if (looped && enabled.value && playing.value && registration.state.value === 'ready') pipeline.start()
+    }
     video.addEventListener('timeupdate', updateTime)
     cleanup(() => { for (const name of events) video.removeEventListener(name, sync); video.removeEventListener('timeupdate', updateTime) })
     sync()
@@ -43,10 +54,11 @@ export function useFrameInference(videoRef, registration, zones, camera, context
     if (enabled.value && playing.value && registration.state.value === 'ready') pipeline.start()
     else pipeline.stop(!enabled.value ? 'DISABLED' : registration.state.value === 'ready' ? 'PAUSED' : 'WAITING_FOR_VIDEO')
   }, { immediate: true, flush: 'sync' })
-  const expired = computed(() => result.value && Date.parse(result.value.expires_at) <= now.value)
+  const expired = computed(() => result.value && (result.value.stale ||
+    !Number.isFinite(Date.parse(result.value.expires_at)) || Date.parse(result.value.expires_at) <= now.value))
   const displayStatus = computed(() => expired.value ? 'STALE' : status.value)
-  const detections = computed(() => !enabled.value || !playing.value || expired.value || !result.value ||
-    Math.abs(videoTime.value - result.value.video_time_seconds) > 2 ? [] : result.value.detections || [])
+  const detections = computed(() => !enabled.value || !playing.value || expired.value || !result.value
+    ? [] : result.value.detections || [])
   const timer = setInterval(() => {
     now.value = Date.now()
     if (expired.value) context.states[camera.camera_code] = 'STALE'

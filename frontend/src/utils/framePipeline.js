@@ -1,8 +1,8 @@
 // One in-flight operation per card; no frame queue. Sample only when the slot is free.
 export function createFramePipeline({ api, capture, input, changed, clientId, intervalMs = 2000,
-  uuid = () => crypto.randomUUID(), schedule = setTimeout, cancel = clearTimeout }) {
+  uuid = () => crypto.randomUUID(), schedule = setTimeout, cancel = clearTimeout, now = Date.now }) {
   let generation = 0, revision = 0, sequence = 0, active = false, disposed = false, busy = false
-  let session = null, sourceId = null, timer, controller
+  let session = null, sourceId = null, timer, controller, lastResult = null
   const release = old => { if (old) Promise.resolve(api.stop(old)).catch(() => {}) }
 
   function stop(status = 'WAITING_FOR_VIDEO') {
@@ -12,6 +12,7 @@ export function createFramePipeline({ api, capture, input, changed, clientId, in
     controller?.abort()
     release(session)
     session = null
+    lastResult = null
     changed({ status, result: null, session: null })
   }
   function start() {
@@ -27,6 +28,8 @@ export function createFramePipeline({ api, capture, input, changed, clientId, in
   async function tick() {
     if (!active || disposed || busy) return
     busy = true
+    const started = now()
+    let processedMs = 0
     const token = generation
     const current = () => active && !disposed && generation === token
     controller = new AbortController()
@@ -45,13 +48,17 @@ export function createFramePipeline({ api, capture, input, changed, clientId, in
         source_id: sourceId, frame_sequence: ++sequence }
       const result = await api.detect(metadata, snapshot.blob, controller.signal)
       if (!current() || result.session_id !== session.session_id || result.source_id !== sourceId || result.frame_sequence !== sequence) return
+      lastResult = result
+      processedMs = Number.isFinite(result.inference_duration_ms) ? Math.max(0, result.inference_duration_ms) : 0
       changed({ status: result.status, result, session })
     } catch (error) {
       if (current()) {
         if (error.status === 409) { release(session); session = null; revision += 1 }
         const status = error.status === 429 ? 'DETECTING' : error.status === 409 ? 'WAITING_FOR_VIDEO'
           : [413, 415, 422].includes(error.status) ? 'INVALID_FRAME' : 'AI_OFFLINE'
-        changed({ status, result: null, session })
+        // Backpressure is temporary; freshness and session checks still apply in the UI.
+        if (error.status !== 429) lastResult = null
+        changed({ status, result: lastResult, session })
       }
     } finally {
       cancel(timeout)
@@ -59,7 +66,10 @@ export function createFramePipeline({ api, capture, input, changed, clientId, in
       // Even an aborted old operation must settle before the next snapshot starts.
       if (active && !disposed) {
         cancel(timer)
-        const delay = Math.max(intervalMs, (session?.min_interval_seconds || 0) * 1000)
+        // Server rate limiting starts when the model slot is acquired, after any queue wait.
+        // Only processing time can be deducted from that minimum, not the whole round trip.
+        const minRest = (session?.min_interval_seconds || 0) * 1000 - processedMs
+        const delay = Math.max(0, intervalMs - (now() - started), minRest)
         timer = schedule(tick, generation === token ? delay + Math.random() * 250 : 0)
       }
     }

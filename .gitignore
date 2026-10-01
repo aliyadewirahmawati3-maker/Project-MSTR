@@ -12,6 +12,9 @@
 /artifacts/stage3/
 /artifacts/yolo/
 /models/
+/datasets/
+/artifacts/datasets/
+/artifacts/training/
 *.pt
 *.onnx
 /tools/cctv/__pycache__/

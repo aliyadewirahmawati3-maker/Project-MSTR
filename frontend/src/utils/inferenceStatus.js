@@ -15,6 +15,9 @@ export function freshYoloResult(row, now = Date.now()) {
 
 export function safeYoloRow(row, session, now = Date.now()) {
   if (session && row.session_id === session.session_id && row.source_id === session.source_id && freshYoloResult(row, now)) return row
+  const stale = row.stale || Boolean(row.expires_at && Date.parse(row.expires_at) <= now)
+  const current = session && row.session_id === session.session_id && row.source_id === session.source_id
   return { ...row, outer_lane_queue: null, inner_lane_queue: null, total_queue: null,
-    stale: row.stale || Boolean(row.expires_at && Date.parse(row.expires_at) <= now) }
+    status: !current ? 'WAITING_FOR_DETECTION' : stale ? 'STALE' : row.status,
+    stale }
 }

@@ -44,11 +44,12 @@ Parameter publik dapat ditentukan di environment proses PowerShell sebelum `dock
 | `SIGAP_YOLO_IMAGE_SIZE` | `640` | 320–960, dibulatkan ke kelipatan 32 |
 | `SIGAP_YOLO_MIN_INTERVAL_SECONDS` | `1.5` | Batas request per kamera |
 | `SIGAP_YOLO_MAX_AGE_SECONDS` | `10` | Umur maksimum dihitung dari waktu capture, termasuk waktu proses |
-| `VITE_YOLO_INTERVAL_MS` (host Vite) | `2000` | Jeda setelah request selesai, minimum 1500 ms; ditambah jitter kecil antarkamera |
+| `SIGAP_YOLO_SLOT_TIMEOUT_SECONDS` | `3` | Batas menunggu slot model, 0,1–5 detik; maksimal satu frame per kamera |
+| `VITE_YOLO_INTERVAL_MS` (host Vite) | `2000` | Target interval awal request, minimum 1500 ms; waktu proses termasuk dalam interval, ditambah jitter kecil antarkamera |
 
 Snapshot seluruh frame diperkecil proporsional sampai sisi terpanjang 1280 px, JPEG quality 0,85, tanpa crop. Container menerima JPEG/PNG sampai 2 MiB, dimensi snapshot 16–2048 px per sumbu. Ukuran original dan rasio snapshot divalidasi sebelum inference. Ukuran original maksimum 8192 px per sumbu.
 
-Satu request aktif per kartu dan satu slot inference global. Jika model sibuk, HTTP 429 membuang snapshot tersebut; browser mengambil frame **baru** pada kesempatan berikutnya. Tidak ada antrean frame. Pause/seek/remove/error/dispose/disable membatalkan request, menghapus hasil UI, dan menutup sesi. Proses native yang sudah berjalan mungkin selesai di server, tetapi tidak boleh memasukkan hasil ke sesi yang telah ditutup/diganti.
+Satu request aktif per kartu dan satu slot inference global. Empat kamera dapat menunggu slot secara terbatas, maksimal satu frame per kamera. Request duplikat dari kamera yang masih menunggu/berproses ditolak HTTP 429. Jika batas tunggu habis, browser mengambil frame **baru** pada kesempatan berikutnya dan mempertahankan hasil terakhir selama belum kedaluwarsa. Usia frame dan identitas sesi diperiksa kembali setelah mendapat slot. Pause/seek/loop/remove/error/dispose/disable membatalkan request, menghapus hasil UI, dan menutup sesi. Proses native yang sudah berjalan mungkin selesai di server, tetapi tidak boleh memasukkan hasil ke sesi yang telah ditutup/diganti.
 
 ## Kontrak endpoint
 
@@ -92,9 +93,17 @@ Respons deteksi menyertakan identitas sumber/sesi/frame, `source_type: YOLO_LOCA
 | `INFERENCE_ERROR` | Frame gagal diproses; semua antrean `null` |
 | `STALE` | Hasil kedaluwarsa; semua antrean `null`, `stale: true` |
 
-UI menampilkan label singkat dan detail sesi/model/timing dalam accordion. Bbox berasal dari frame sampel terakhir, bukan tracking interpolasi; disembunyikan bila selisih posisi video melebihi 2 detik, saat pause/seek, atau hasil kedaluwarsa. Overlay SVG mengikuti area gambar asli dengan letterbox dan resize, serta tidak menangkap pointer pada kontrol HTML5.
+UI menampilkan label singkat dan detail sesi/model/timing dalam accordion. Bbox berasal dari frame sampel terakhir, bukan tracking interpolasi; dipertahankan sampai hasil berikutnya atau TTL capture habis. Waktu frame tertera pada kartu CCTV. Pause/seek/loop, penggantian sumber, atau error membersihkan hasil. Overlay SVG mengikuti area gambar asli dengan letterbox dan resize, serta tidak menangkap pointer pada kontrol HTML5.
+
+Respons `detect-frame` langsung memperbarui ringkasan antrean dan peta melalui state sesi browser. Polling tetap tersedia untuk sinkronisasi, tetapi nomor urut frame mencegah respons polling lama menimpa hasil yang lebih baru. Data harus cocok dengan sesi/sumber aktif dan belum kedaluwarsa; kegagalan polling tidak menghapus hasil frame browser yang masih sah.
+
+Peta YOLO menampilkan okupansi dua lajur per arah, maksimal tujuh ikon per lajur, dengan angka total sebenarnya. Posisi ikon bersifat skematis: tidak memproyeksikan bbox CCTV ke koordinat geografis atau mengklaim tracking. Lampu dan kendaraan simulator hanya muncul pada mode simulasi. Header menampilkan mode visualisasi, sedangkan status kontrol lampu tetap menyebut konfigurasi backend `ATCS_NORMAL`/simulator.
+
+Rekomendasi menampilkan **Data parsial (n/4 arah)** serta nama arah yang masih ditunggu jika baru sebagian video menghasilkan antrean. Arah yang tidak tersedia tetap `null`, tidak diasumsikan kosong. Perbandingan fase dan durasi hijau diberikan setelah empat arah memiliki data valid; hasil 0 kendaraan dari frame valid termasuk data yang siap.
 
 ## Zona dan video baru
+
+Untuk checkpoint hasil fine-tuning dataset kendaraan, lihat [panduan training lokal vehicles v2](vehicles-v2-local-training.md). Profile default tetap COCO; profile `vehicles-v2` membutuhkan path dan SHA256 eksplisit, serta melaporkan cakupan tiga kelas dan keterbatasan sepeda motor.
 
 Sumber polygon tetap `config/cctv/queue_zones.json`, dengan validator existing `load_inputs` dan `pixel_zones`. Koordinat normalized terhadap frame asli, bukan dimensi kartu. Filter kelas memakai **nama kelas model** `car`, `motorcycle`, `bus`, `truck`; ambulans/pemadam tidak diklaim sebagai kelas COCO.
 
@@ -161,3 +170,11 @@ Bukti browser lokal disimpan terpisah dan ignored di `artifacts/yolo/`: screensh
 - Dokumentasi: `README.md`, `docs/yolov13-local-inference.md`.
 
 Tidak ada perubahan Laravel/database, konfigurasi polygon, video sumber, `.env`, atau Git remote. Weights, artifact verifikasi, dan MP4 tetap diabaikan Git. Tidak ada commit/push otomatis.
+
+## Verifikasi perbaikan sinkronisasi dan peta
+
+Pengujian setelah perbaikan: **92 tes frontend**, **57 tes AI service**, dan **10 tes backend (78 assertions)** lulus; production build berhasil. Regresi baru mencakup HTTP 429 tanpa menghapus hasil, interval yang memperhitungkan waktu tunggu model, empat kamera bersamaan, invalidasi sesi saat menunggu, frame kedaluwarsa, loop video, polling yang terlambat, serta jumlah ikon dan antrean parsial.
+
+Uji Edge headless dengan empat rekaman asli membuktikan angka antrean, rekomendasi, dan peta tetap diperbarui saat request polling ringkasan sengaja diblokir. Pause dan penggantian sumber membersihkan data arah terkait, mode simulasi dapat dipulihkan, dan tampilan 1440/390 px tidak menimbulkan error JavaScript atau overflow horizontal. Dalam jendela pengukuran 20,005 detik setelah model siap, terdapat **20 respons frame sukses: 5 per kamera**. Ini pengukuran pada beban host saat pengujian, bukan jaminan FPS; HTTP 429 masih dapat terjadi saat beban tinggi dan hasil lama tetap mengikuti TTL.
+
+Bukti lokal ignored tersedia di `artifacts/yolo/fix-browser-verification.json`, `fix-map-desktop.png`, `fix-map-mobile.png`, `fix-queues-desktop.png`, dan `fix-recommendation-desktop.png`. Perbaikan alur ini tidak mengubah weights, threshold model, atau polygon kalibrasi; akurasi deteksi terhadap anotasi ground truth belum diukur.

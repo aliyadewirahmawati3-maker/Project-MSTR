@@ -8,7 +8,7 @@
     "test:zones": "node --test src/config/queueZones.test.js src/composables/useVideoZoneProfile.test.js",
     "test:phase-recommendation": "node --test src/utils/phaseRecommendation.test.js",
     "test:queue-source": "node --test src/utils/queueSource.test.js",
-    "test:map-mode": "node --test src/composables/useMapDisplayMode.test.js",
+    "test:map-mode": "node --test src/composables/useMapDisplayMode.test.js src/utils/yoloMapQueues.test.js",
     "test:inference": "node --test src/utils/framePipeline.test.js src/composables/useFrameInference.test.js",
     "dev": "vite",
     "build": "vite build",

@@ -4,8 +4,9 @@ from dataclasses import replace
 from datetime import datetime, timezone, timedelta
 import json
 import os
+import time
 from pathlib import Path
-from threading import Event
+from threading import Barrier, Event
 from uuid import uuid4
 
 import cv2
@@ -177,6 +178,7 @@ def test_replacement_and_late_response_cannot_restore_previous_session(setup):
 
 def test_single_inference_slot_frequency_sequence_and_stop(setup):
     service, _, _, meta, content, elapsed, _ = setup
+    service.slot_timeout = .05
     service.inference_slot.acquire()
     try:
         with pytest.raises(HTTPException) as error:
@@ -196,6 +198,83 @@ def test_single_inference_slot_frequency_sequence_and_stop(setup):
         service.detect(meta.model_copy(update={"frame_sequence": 3}), content)
     assert error.value.status_code == 409
     assert service.latest(meta.camera_id)["total_queue"] is None
+
+
+def test_four_simultaneous_cameras_wait_and_each_gets_a_result(setup):
+    service, detector, _, meta, content, _, registration = setup
+    service.slot_timeout = 2
+    barrier = Barrier(4)
+    active = 0
+    peak = 0
+    def predict(frame):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        time.sleep(.05)
+        active -= 1
+        return []
+    detector.predict = predict
+    frames = []
+    for camera in load_inputs(CONFIG):
+        session = service.start(registration.model_copy(update={"camera_id": camera.camera_code,
+            "revision": 2, "source_id": uuid4()}))
+        frames.append(meta.model_copy(update={"camera_id": camera.camera_code, "session_id": session["session_id"],
+            "source_id": session["source_id"], "profile_id": camera.profile_id,
+            "input_camera_code": camera.camera_code, "source_sha256": camera.source_sha256}))
+    def send(frame):
+        barrier.wait(timeout=5)
+        return service.detect(frame, content)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(send, frames))
+    assert {row["camera_id"] for row in results} == {c.camera_code for c in load_inputs(CONFIG)}
+    assert all(row["status"] == "DETECTION_READY" for row in results)
+    assert peak == 1
+    assert not service.pending_cameras
+
+
+def test_waiting_camera_rejects_duplicates_and_rechecks_session_before_inference(setup):
+    service, detector, _, meta, content, _, registration = setup
+    service.slot_timeout = 2
+    service.inference_slot.acquire()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(service.detect, meta, content)
+        try:
+            deadline = time.monotonic() + 1
+            while meta.camera_id not in service.pending_cameras and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert meta.camera_id in service.pending_cameras
+            with pytest.raises(HTTPException) as error:
+                service.detect(meta.model_copy(update={"frame_sequence": 2}), content)
+            assert error.value.status_code == 429
+            service.start(registration.model_copy(update={"revision": 2, "source_id": uuid4()}))
+        finally:
+            service.inference_slot.release()
+        with pytest.raises(HTTPException) as error:
+            pending.result(timeout=5)
+        assert error.value.status_code == 409
+    assert detector.calls == 0
+    assert not service.pending_cameras
+
+
+def test_frame_that_expires_while_waiting_never_runs_detector(setup):
+    service, detector, _, meta, content, elapsed, _ = setup
+    service.slot_timeout = 2
+    service.inference_slot.acquire()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        pending = pool.submit(service.detect, meta, content)
+        try:
+            deadline = time.monotonic() + 1
+            while meta.camera_id not in service.pending_cameras and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert meta.camera_id in service.pending_cameras
+            elapsed[0] = service.max_age + 1
+        finally:
+            service.inference_slot.release()
+        with pytest.raises(HTTPException) as error:
+            pending.result(timeout=5)
+        assert error.value.status_code == 422
+    assert detector.calls == 0
+    assert not service.pending_cameras
 
 
 def test_http_validation_and_openapi(setup):

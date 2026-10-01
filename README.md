@@ -18,8 +18,8 @@ Tahap 3.8 menyiapkan `cctv-offline/` (ignored Git) dan mount read-only ke `/data
 
 - Mode awal `ATCS_NORMAL` adalah **simulator**. Durasi fase merupakan parameter prototype, bukan data faktual ATCS Bandung.
 - Empat kamera pada backend tetap merupakan konfigurasi awal: `UNCONFIGURED`, `stream_url: null`. Alat Tahap 3 membaca rekaman lokal hanya untuk inspeksi metadata dan preview zona; tidak ada CCTV live atau pemrosesan video oleh service aplikasi.
-- AI service menyediakan health check dan ringkasan konfigurasi/estimator offline; inferensi YOLO belum aktif. Container sehat tidak berarti deteksi kendaraan aktif.
-- Tidak ada YOLO, vehicle tracking/tracking ID, OCR plat nomor, pengenalan wajah, algoritma heuristik keputusan, atau pengendalian lampu fisik.
+- AI service menyediakan health check, ringkasan offline, dan inferensi snapshot YOLO lokal saat mode YOLO dipilih. Container sehat tidak berarti model atau video sudah siap.
+- Rekomendasi heuristik DSS memakai antrean valid dari empat arah. Data parsial menunjukkan arah yang masih ditunggu. Tidak ada vehicle tracking/tracking ID, OCR plat nomor, pengenalan wajah, atau pengendalian lampu fisik.
 - `traffic_measurements` dan `heuristic_decisions` tetap kosong. Data simulator tidak diklaim sebagai hasil deteksi nyata.
 
 ## Struktur
@@ -28,7 +28,7 @@ Tahap 3.8 menyiapkan `cctv-offline/` (ignored Git) dan mount read-only ke `/data
 | --- | --- |
 | `frontend/` | Dashboard Vue/Vite dan simulator visual |
 | `backend/` | Laravel, 9 migration, Eloquent model, seeder, API read-only, PHPUnit |
-| `ai-service/` | FastAPI standby, tanpa inferensi |
+| `ai-service/` | FastAPI, inferensi snapshot YOLO lokal, dan ringkasan antrean |
 | `database/schema/01_init.sql` | Ekstensi PostgreSQL; tabel dikelola Laravel |
 | `database/erd/README.md` | Diagram relasi |
 | `docs/api.md` | Kontrak endpoint dan contoh JSON |
@@ -159,3 +159,5 @@ Tes integrasi menggunakan respons Laravel nyata dan menyuntikkan kegagalan hanya
 Pipeline snapshot YOLOv13-N pretrained tersedia melalui pilihan **YOLO lokal** pada panel peta. Snapshot diambil dari video browser dan diproses FastAPI localhost, tanpa upload MP4, training, tracking, atau kontrol ATCS. Simulasi visual tetap menjadi default. Nilai antrean adalah jumlah kendaraan di zona pada frame sampel terbaru; data kosong/gagal/kedaluwarsa tetap `null`.
 
 Ikuti [panduan instalasi, kontrak sesi, kalibrasi, test, dan bukti inference nyata](docs/yolov13-local-inference.md). Weights resmi diunduh dengan `powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/setup-yolov13.ps1` ke folder ignored `models/`. Frontend tetap dijalankan dari host memakai `npm.cmd`.
+
+Dataset RF100 vehicles v2 telah diaudit dan disiapkan untuk training lokal kelas mobil/bus/truk, dengan pembagian berdasarkan video sumber. Panduan dan keterbatasan kelas sepeda motor ada di [training dataset kendaraan lokal](docs/vehicles-v2-local-training.md). Training dan kandidat weights terpisah dari model COCO aktif; API Roboflow tidak diperlukan.

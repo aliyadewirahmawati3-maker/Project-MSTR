@@ -5,7 +5,7 @@ import { freshYoloResult, safeYoloRow } from './inferenceStatus.js'
 import { recommendPhase } from './phaseRecommendation.js'
 
 const settle = () => new Promise(resolve => setImmediate(resolve))
-function fixture(t, override = {}) {
+function fixture(t, override = {}, options = {}) {
   const states = [], calls = [], stopped = [], timers = new Map()
   let serial = 0
   const api = {
@@ -17,7 +17,7 @@ function fixture(t, override = {}) {
   const pipeline = createFramePipeline({ api, clientId: 'test-client', uuid: () => `source-${++serial}`,
     input: () => ({ camera_id: 'CAM-W-01', profile_id: 'CAM-W-01' }),
     capture: async () => ({ metadata: { captured_at: new Date().toISOString() }, blob: 'unit fixture' }),
-    changed: state => states.push(state), schedule: fn => { const id = ++serial; timers.set(id, fn); return id }, cancel: id => timers.delete(id) })
+    changed: state => states.push(state), schedule: fn => { const id = ++serial; timers.set(id, fn); return id }, cancel: id => timers.delete(id), ...options })
   t.after(pipeline.dispose)
   return { pipeline, states, calls, stopped, timers }
 }
@@ -116,4 +116,49 @@ test('invalid snapshots are distinguished from an offline AI service', async t =
   pipeline.start(); await settle()
   assert.equal(states.at(-1).status, 'INVALID_FRAME')
   assert.equal(states.at(-1).result, null)
+})
+
+test('429 retains the previous frame in the same session; errors and source changes clear it', async t => {
+  let failure = null
+  const { pipeline, states } = fixture(t, { detect: async meta => {
+    if (failure) throw Object.assign(new Error('request failed'), { status: failure })
+    return { ...meta, status: 'DETECTION_READY', detections: [{ class_name: 'car' }] }
+  } })
+  pipeline.start(); await settle()
+  const first = states.at(-1).result
+  failure = 429
+  await pipeline.tick()
+  assert.equal(states.at(-1).result, first)
+  assert.equal(states.at(-1).status, 'DETECTING')
+  failure = 422
+  await pipeline.tick()
+  assert.equal(states.at(-1).result, null)
+  failure = 429
+  pipeline.start(); await settle()
+  assert.equal(states.at(-1).result, null)
+})
+
+test('sampling interval includes processing time instead of adding another full delay', async t => {
+  let time = 0
+  const delays = []
+  const { pipeline } = fixture(t, { detect: async meta => {
+    time += 1600
+    return { ...meta, status: 'DETECTION_READY' }
+  } }, { now: () => time, schedule: (_, ms) => { delays.push(ms); return delays.length }, cancel: () => {} })
+  pipeline.start(); await settle()
+  assert.ok(delays.at(-1) >= 400 && delays.at(-1) < 650)
+})
+
+test('waiting for other cameras does not consume the server minimum interval', async t => {
+  let time = 0
+  const delays = []
+  const { pipeline } = fixture(t, {
+    start: async input => ({ ...input, session_id: 's', min_interval_seconds: 1.5 }),
+    detect: async meta => {
+      time += 1800 // 1600 ms waiting plus 200 ms processing.
+      return { ...meta, status: 'DETECTION_READY', inference_duration_ms: 200 }
+    },
+  }, { now: () => time, schedule: (_, ms) => { delays.push(ms); return delays.length }, cancel: () => {} })
+  pipeline.start(); await settle()
+  assert.ok(delays.at(-1) >= 1300 && delays.at(-1) < 1550)
 })

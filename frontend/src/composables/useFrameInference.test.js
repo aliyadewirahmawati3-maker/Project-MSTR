@@ -24,9 +24,11 @@ test('video lifecycle starts only in YOLO; pause, seek, replacement, error and r
   context.map.selectMode('YOLO_LOCAL_REALTIME'); await settle()
   assert.equal(calls, 1)
   assert.ok(context.sessions['CAM-W-01'])
+  assert.equal(context.results['CAM-W-01'].session_id, inference.result.value.session_id)
   video.paused = true; video.dispatchEvent(new Event('pause')); await settle()
   assert.equal(inference.result.value, null)
   assert.equal(context.sessions['CAM-W-01'], undefined)
+  assert.equal(context.results['CAM-W-01'], undefined)
   assert.equal(inference.label.value, 'Video dijeda')
   video.paused = false; video.dispatchEvent(new Event('playing')); await settle()
   assert.equal(calls, 2)
@@ -43,4 +45,33 @@ test('video lifecycle starts only in YOLO; pause, seek, replacement, error and r
   assert.equal(context.sessions['CAM-W-01'], undefined)
   context.map.selectMode('SIMULATION_VISUAL'); await settle()
   assert.equal(inference.label.value, 'Menunggu AI')
+})
+
+test('overlay survives the next sampling interval, expires, and clears when video loops', async t => {
+  const context = useLocalInference()
+  const video = Object.assign(new EventTarget(), { paused: false, ended: false, seeking: false, readyState: 3, currentTime: 5 })
+  const videoRef = shallowRef(null)
+  const registration = { version: ref(1), state: ref('ready') }
+  const zones = { inputCameraCode: ref('CAM-W-01'), selectedProfile: ref('CAM-W-01'), sourceHash: ref('a'.repeat(64)), canAnalyzeZones: ref(true), sameViewConfirmed: ref(false) }
+  let pendingFrame
+  const inference = useFrameInference(videoRef, registration, zones, { camera_code: 'CAM-W-01' }, context, {
+    capture: async () => ({ metadata: { video_time_seconds: video.currentTime }, blob: 'fixture' }),
+    api: { start: async input => ({ ...input, session_id: `s-${input.revision}` }), stop: async () => {},
+      detect: meta => new Promise(resolve => { pendingFrame = () => resolve({ ...meta, status: 'DETECTION_READY', expires_at: new Date(Date.now()+10000).toISOString(), detections: [{ class_name: 'car' }] }) }) },
+  })
+  t.after(inference.dispose)
+  videoRef.value = video
+  context.map.selectMode('YOLO_LOCAL_REALTIME'); await settle()
+  pendingFrame(); await settle()
+  const firstSource = inference.result.value.source_id
+  video.currentTime = 8.5; video.dispatchEvent(new Event('timeupdate'))
+  assert.equal(inference.detections.value.length, 1)
+  inference.result.value = { ...inference.result.value, expires_at: '2000-01-01T00:00:00Z' }
+  assert.equal(inference.detections.value.length, 0)
+  assert.equal(inference.status.value, 'STALE')
+  video.currentTime = 0; video.dispatchEvent(new Event('timeupdate')); await settle()
+  assert.equal(inference.result.value, null)
+  assert.equal(context.results['CAM-W-01'], undefined)
+  pendingFrame(); await settle()
+  assert.notEqual(inference.result.value.source_id, firstSource)
 })

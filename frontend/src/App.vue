@@ -5,6 +5,7 @@ import { useDashboardConfiguration } from './composables/useDashboardConfigurati
 import { useQueueSummary } from './composables/useQueueSummary.js'
 import { formatQueueValue } from './services/aiQueueSummary.js'
 import { recommendPhase } from './utils/phaseRecommendation.js'
+import { inferenceLabel } from './utils/inferenceStatus.js'
 import AppIcon from './components/AppIcon.vue'
 import IntersectionMap from './components/IntersectionMap.vue'
 import CctvMonitoring from './components/CctvMonitoring.vue'
@@ -24,12 +25,11 @@ const menus = [
 const { configuration, configurationFresh, refreshing, error, lastChecked, backendStatus, databaseStatus, statusMessage, refresh, start, dispose } = useDashboardConfiguration()
 const localInference = useLocalInference()
 provide('localInference', localInference)
-const { approaches: queueApproaches, loading: queueLoading, sourceInfo: queueSource, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary({ mode: localInference.map.mode, sessions: localInference.sessions, inferenceStatus: localInference.status })
+const { approaches: queueApproaches, loading: queueLoading, sourceInfo: queueSource, refresh: refreshQueueSummary, start: startQueueSummary, dispose: disposeQueueSummary } = useQueueSummary({ mode: localInference.map.mode, sessions: localInference.sessions, results: localInference.results, inferenceStatus: localInference.status })
 const phaseRecommendation = computed(() => recommendPhase(queueApproaches.value))
-const awaitingQueues = computed(() => phaseRecommendation.value.recommended_phase === 'WAITING_FOR_DATA')
-const recommendationReason = computed(() => awaitingQueues.value
-  ? 'Deteksi antrean belum tersedia.'
-  : phaseRecommendation.value.reason)
+const recommendationReason = computed(() => phaseRecommendation.value.reason)
+const detectionMode = computed(() => localInference.map.presentation.value.label)
+const localDetectionStatus = computed(() => localInference.map.isSimulation.value ? 'Nonaktif' : inferenceLabel(localInference.status.value))
 const systemMode = computed(() => configurationFresh.value ? configuration.value.systemStatus.current_mode : 'Standby')
 const aiStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_ai_healthy === true ? 'Sehat' : 'Standby')
 const cctvStatus = computed(() => !configurationFresh.value ? 'Belum terverifikasi' : configuration.value.systemStatus.is_cctv_healthy === true ? 'Sehat (API)' : 'Standby')
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
           <div v-if="searchOpen" id="search-results" class="search-results"><span class="popover-eyebrow">NAVIGASI CEPAT</span><button v-for="menu in searchResults" :key="menu.label" type="button" @click="navigate(menu)"><AppIcon :name="menu.icon" :size="16" /><span>{{ menu.label }}</span><span v-if="!menu.target" class="search-placeholder">Standby</span><AppIcon v-else name="chevron" :size="14" /></button><p v-if="!searchResults.length">Menu tidak ditemukan. Coba “CCTV” atau “Peta”.</p></div>
         </form>
         <div class="topbar-right">
-          <span class="topbar-status"><i class="status-dot"></i>Mode Simulator</span><span class="topbar-divider"></span>
+          <span class="topbar-status"><i class="status-dot"></i>{{ detectionMode }}</span><span class="topbar-divider"></span>
           <div class="topbar-popover-wrap"><button class="icon-button notification-button" aria-label="Notifikasi sistem" :aria-expanded="openPopover === 'notifications'" @click="openPopover = openPopover === 'notifications' ? '' : 'notifications'"><AppIcon name="bell" /></button><div v-if="openPopover === 'notifications'" class="topbar-popover notification-popover"><h3>Notifikasi sistem</h3><div class="notification-item"><span class="icon-tile blue"><AppIcon name="info" :size="19" /></span><div><strong>Menunggu koneksi CCTV</strong><p>Stream tidak ditampilkan pada tahap ini. Status kamera tersedia pada panel CCTV dari konfigurasi API.</p></div></div><span class="popover-note">Informasi prototype · Simulator</span></div></div>
           <div class="topbar-popover-wrap"><button class="operator-button" :aria-expanded="openPopover === 'profile'" aria-label="Profil Operator BCC" @click="openPopover = openPopover === 'profile' ? '' : 'profile'"><span class="avatar avatar-small">OP</span><span class="topbar-operator">Operator BCC</span><AppIcon name="down" :size="14" /></button><div v-if="openPopover === 'profile'" class="topbar-popover profile-popover"><span class="avatar">OP</span><h3>Operator BCC</h3><p>Bandung Command Center</p><span class="badge badge-blue">Operator · Simulator</span></div></div>
         </div>
@@ -147,7 +147,7 @@ onBeforeUnmount(() => {
     <main id="dashboard" class="main-content" tabindex="-1">
       <section class="hero" aria-labelledby="dashboard-title">
         <div class="hero-content"><div class="hero-eyebrow"><span>COMMAND CENTER</span><span class="eyebrow-slash">/</span>PEMANTAUAN SIMPANG</div><h1 id="dashboard-title">Dashboard Operasional</h1><p>SIGAP — {{ configuration?.intersection.name || 'Konfigurasi simpang' }} · {{ configuration?.intersection.code || '—' }} · {{ configuration?.intersection.location || '—' }}</p></div>
-        <div class="hero-actions"><span class="hero-badge"><i class="status-dot"></i>{{ systemMode }} · SIMULATOR</span><div class="hero-action-row"><span class="operator-monitor"><AppIcon name="shield" :size="15" />Dipantau Operator BCC</span><button class="refresh-button" :disabled="refreshing" @click="checkHealth(true)"><AppIcon name="refresh" :size="16" :class="{ spinning: refreshing }" />{{ refreshing ? 'Memeriksa...' : 'Refresh Status' }}</button></div></div>
+        <div class="hero-actions"><span class="hero-badge"><i class="status-dot"></i>{{ detectionMode }} · DSS</span><div class="hero-action-row"><span class="operator-monitor"><AppIcon name="shield" :size="15" />Dipantau Operator BCC</span><button class="refresh-button" :disabled="refreshing" @click="checkHealth(true)"><AppIcon name="refresh" :size="16" :class="{ spinning: refreshing }" />{{ refreshing ? 'Memeriksa...' : 'Refresh Status' }}</button></div></div>
       </section>
 
       <div class="dashboard-body">
@@ -156,7 +156,7 @@ onBeforeUnmount(() => {
             <div class="summary-heading"><h2 id="operation-title">Status Operasional Simpang</h2><span class="summary-meta">{{ lastChecked ? `${lastChecked} WIB` : 'Menunggu status' }}</span></div>
             <div class="operation-metrics">
               <div class="operation-metric"><span class="icon-tile blue"><AppIcon name="arrows" /></span><div><span class="metric-label">Fase aktif (konfigurasi API)</span><strong>{{ activePhase }}</strong><span class="metric-note">Parameter simulator</span></div></div>
-              <div class="operation-metric"><span class="icon-tile indigo"><AppIcon name="traffic" /></span><div><span class="metric-label">Mode sistem</span><strong>{{ systemMode }}</strong><span class="metric-note">Simulator</span></div></div>
+              <div class="operation-metric"><span class="icon-tile indigo"><AppIcon name="traffic" /></span><div><span class="metric-label">Mode kontrol lampu (simulator)</span><strong>{{ systemMode }}</strong><span class="metric-note">Visualisasi: {{ detectionMode }}</span></div></div>
               <div class="operation-metric"><span class="icon-tile green"><AppIcon name="shield" /></span><div><span class="metric-label">Status EVP</span><strong class="text-green">Aman</strong><span class="metric-note">Simulator</span></div></div>
               <div class="operation-metric"><span class="icon-tile amber"><AppIcon name="pulse" /></span><div><span class="metric-label">Kesehatan layanan</span><strong>{{ serviceStatus }}</strong><span class="metric-note" role="status" aria-live="polite">{{ statusMessage }}</span></div></div>
             </div>
@@ -169,20 +169,20 @@ onBeforeUnmount(() => {
                 <div><span>{{ queue.approach_name }}</span><strong>{{ formatQueueValue(queue.total_queue) }}</strong></div>
                 <div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment" :class="{ active: Number.isFinite(queue.total_queue) && segment <= Math.min(12, queue.total_queue) }"></i></div>
                 <p>Luar: {{ formatQueueValue(queue.outer_lane_queue) }}</p>
-                <p>Dalam: {{ formatQueueValue(queue.inner_lane_queue) }}</p>
+                <p>Dalam: {{ formatQueueValue(queue.inner_lane_queue) }}</p><p v-if="!localInference.map.isSimulation.value && queue.total_queue === null">{{ inferenceLabel(queue.status) }}</p>
               </div>
             </div>
           </section>
         </div>
 
         <div class="main-grid">
-          <IntersectionMap :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" />
+          <IntersectionMap :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" :queue-approaches="queueApproaches" />
           <div class="decision-column">
             <section id="rekomendasi-ai" class="card recommendation-card" tabindex="-1" aria-labelledby="recommendation-title">
               <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span :class="['badge', `badge-${queueSource.variant}`]">{{ queueSource.label }}</span></div>
               <div class="recommendation-content">
                 <dl class="recommendation-metrics">
-                  <div><dt>Fase rekomendasi</dt><dd class="recommendation-phase">{{ awaitingQueues ? 'Menunggu data' : phaseRecommendation.label }}</dd></div>
+                  <div><dt>Fase rekomendasi</dt><dd class="recommendation-phase">{{ phaseRecommendation.label }}</dd></div>
                   <div><dt>Skor prioritas</dt><dd>{{ phaseRecommendation.priority_score ?? '-' }}</dd></div>
                   <div><dt>Durasi hijau</dt><dd>{{ phaseRecommendation.recommended_green_seconds == null ? '-' : `${phaseRecommendation.recommended_green_seconds} dtk` }}</dd></div>
                 </dl>
@@ -191,8 +191,8 @@ onBeforeUnmount(() => {
               </div>
             </section>
             <section class="card integration-card" aria-labelledby="integration-title">
-              <div class="card-heading"><div><h2 id="integration-title">Status Integrasi ATCS</h2><p>Alur mode operasional sistem</p></div><AppIcon name="link" class="muted-icon" :size="19" /></div>
-              <div class="integration-content"><ol class="integration-flow" aria-label="SIGAP Adaptive ke Fallback Aman ke ATCS Normal"><li :class="{ current: systemMode === 'SIGAP_ADAPTIVE' }"><AppIcon name="spark" :size="19" /><span>SIGAP Adaptive</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'FALLBACK_ATCS' }"><AppIcon name="shield" :size="19" /><span>Fallback Aman</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'ATCS_NORMAL' }"><AppIcon name="traffic" :size="19" /><span>ATCS Normal</span></li></ol><div class="integration-active"><span><i class="status-dot blue"></i>Status aktif</span><strong>{{ systemMode }} (Simulator)</strong></div><p class="operator-note">Operator Bandung Command Center tetap memantau sistem pada seluruh mode.</p><div class="service-readout"><span>Backend <i class="status-dot" :class="{ green: backendStatus === 'Online' }"></i>{{ backendStatus }}</span><span>Database <i class="status-dot" :class="{ green: databaseStatus === 'Online' }"></i>{{ databaseStatus }}</span><span>Layanan AI <i class="status-dot" :class="{ green: aiStatus === 'Sehat' }"></i>{{ aiStatus }}</span><span>CCTV <i class="status-dot" :class="{ green: cctvStatus === 'Sehat (API)' }"></i>{{ cctvStatus }}</span></div></div>
+              <div class="card-heading"><div><h2 id="integration-title">Status Integrasi ATCS</h2><p>Mode kontrol lampu dari konfigurasi backend</p></div><AppIcon name="link" class="muted-icon" :size="19" /></div>
+              <div class="integration-content"><ol class="integration-flow" aria-label="SIGAP Adaptive ke Fallback Aman ke ATCS Normal"><li :class="{ current: systemMode === 'SIGAP_ADAPTIVE' }"><AppIcon name="spark" :size="19" /><span>SIGAP Adaptive</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'FALLBACK_ATCS' }"><AppIcon name="shield" :size="19" /><span>Fallback Aman</span></li><li class="flow-step-arrow" aria-hidden="true"><AppIcon name="arrow" :size="15" /></li><li :class="{ current: systemMode === 'ATCS_NORMAL' }"><AppIcon name="traffic" :size="19" /><span>ATCS Normal</span></li></ol><div class="integration-active"><span><i class="status-dot blue"></i>Mode kontrol lampu</span><strong>{{ systemMode }} (Simulator)</strong></div><p class="operator-note">Visualisasi: {{ detectionMode }} · Deteksi: {{ localDetectionStatus }}. Rekomendasi DSS ditinjau operator; ATCS fisik belum terhubung.</p><div class="service-readout"><span>Backend <i class="status-dot" :class="{ green: backendStatus === 'Online' }"></i>{{ backendStatus }}</span><span>Database <i class="status-dot" :class="{ green: databaseStatus === 'Online' }"></i>{{ databaseStatus }}</span><span>AI backend <i class="status-dot" :class="{ green: aiStatus === 'Sehat' }"></i>{{ aiStatus }}</span><span>Kamera backend <i class="status-dot" :class="{ green: cctvStatus === 'Sehat (API)' }"></i>{{ cctvStatus }}</span></div></div>
             </section>
           </div>
         </div>

@@ -17,6 +17,7 @@ export const MIN_GREEN_SECONDS = GREEN_SECONDS.min
 export const MAX_GREEN_SECONDS = GREEN_SECONDS.max
 
 const APPROACHES = ['WEST', 'NORTH', 'EAST', 'SOUTH']
+const APPROACH_NAMES = { WEST: 'Barat', NORTH: 'Utara', EAST: 'Timur', SOUTH: 'Selatan' }
 const BALANCE_THRESHOLD = 1
 
 function approachesFrom(summary) {
@@ -32,14 +33,20 @@ function numericQueue(item) {
     : null
 }
 
-function waitingRecommendation() {
+function waitingRecommendation(available = [], missing = APPROACHES) {
+  const partial = available.length > 0
   return {
     recommended_phase: RECOMMENDED_PHASES.WAITING_FOR_DATA,
-    label: PHASE_LABELS.WAITING_FOR_DATA,
-    reason: 'Menunggu data antrean dari deteksi kendaraan',
+    label: partial ? `Data parsial (${available.length}/4 arah)` : PHASE_LABELS.WAITING_FOR_DATA,
+    reason: partial
+      ? `Data ${available.map(code => APPROACH_NAMES[code]).join(', ')} tersedia. Menunggu ${missing.map(code => APPROACH_NAMES[code]).join(', ')} sebelum membandingkan kedua fase.`
+      : 'Menunggu data antrean dari deteksi kendaraan',
     priority_score: null,
     recommended_green_seconds: null,
     status: 'WAITING_FOR_DETECTION',
+    data_status: partial ? 'PARTIAL_DATA' : 'WAITING_FOR_DATA',
+    available_approaches: available,
+    missing_approaches: missing,
   }
 }
 
@@ -65,7 +72,9 @@ export function recommendPhase(summary) {
   const north = numericQueue(byCode.get('NORTH'))
   const east = numericQueue(byCode.get('EAST'))
   const south = numericQueue(byCode.get('SOUTH'))
-  if ([west, north, east, south].some(value => value === null)) return waitingRecommendation()
+  const available = APPROACHES.filter(code => numericQueue(byCode.get(code)) !== null)
+  const missing = APPROACHES.filter(code => !available.includes(code))
+  if (missing.length) return waitingRecommendation(available, missing)
 
   const westEastTotal = west + east
   const northSouthTotal = north + south
@@ -93,6 +102,9 @@ export function recommendPhase(summary) {
     priority_score: priorityScore,
     recommended_green_seconds: recommendedGreenSeconds,
     status: approaches.every(row => row.source_type === 'YOLO_LOCAL_REALTIME') ? 'DSS_RECOMMENDATION' : 'SIMULATOR',
+    data_status: 'COMPLETE',
+    available_approaches: APPROACHES.slice(),
+    missing_approaches: [],
   }
 }
 

@@ -1,0 +1,23 @@
+# Optional one-off local training/preparation service. Does not replace the running AI service.
+services:
+  yolo-training:
+    image: ${SIGAP_TRAINING_IMAGE:-project-sigap-astra-main-ai-service}
+    profiles: [training]
+    entrypoint: [python, scripts/train_vehicle_model.py]
+    environment:
+      YOLO_CONFIG_DIR: /tmp/sigap-yolo-training
+      YOLO_AUTOINSTALL: "false"
+      YOLO_OFFLINE: "true"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+    cpus: 2
+    mem_limit: 3g
+    shm_size: 256m
+    volumes:
+      - ./ai-service:/app
+      - ./datasets:/datasets
+      - ./models:/models:ro
+      - ./artifacts/training:/runs
+    network_mode: none
+    healthcheck:
+      disable: true

@@ -2,6 +2,7 @@ import axios from 'axios'
 import { AI_SERVICE_URL } from './localInference.js'
 
 export const QUEUE_APPROACH_ORDER = ['WEST', 'NORTH', 'EAST', 'SOUTH']
+export const QUEUE_CAMERA_IDS = { WEST: 'CAM-W-01', NORTH: 'CAM-N-01', EAST: 'CAM-E-01', SOUTH: 'CAM-S-01' }
 
 export const QUEUE_APPROACH_LABELS = {
   WEST: 'Barat',
@@ -64,6 +65,7 @@ export function normalizeQueueSummary(payload) {
       processed_at: item.processed_at || null,
       expires_at: item.expires_at || null,
       video_time_seconds: item.video_time_seconds ?? null,
+      frame_sequence: item.frame_sequence ?? null,
       inference_duration_ms: item.inference_duration_ms ?? null,
       stale: item.stale === true,
     }

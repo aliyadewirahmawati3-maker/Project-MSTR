@@ -121,7 +121,7 @@ onBeforeUnmount(() => { inference.dispose(); zoneSession.dispose(); registration
         <dl class="lane-info"><div v-for="lane in zones" :key="lane.id"><dt>{{ lane.laneType === 'outer' ? 'Lajur luar' : 'Lajur dalam' }}</dt><dd>{{ movementLabel(lane.movementRule) }}</dd></div></dl>
         <p v-if="file" class="queue-zone-note">{{ zoneStatus }}</p>
         <p class="queue-zone-note">Zona manual untuk demo. Kalibrasi ulang jika sudut rekaman berubah.</p>
-        <p v-if="inferenceEnabled" class="queue-zone-note">Snapshot dari video ini dikirim ke FastAPI localhost. Kotak menunjukkan frame sampel terbaru dan disembunyikan jika tertinggal lebih dari 2 detik video. Tidak ada tracking atau penyimpanan gambar.</p>
+        <p v-if="inferenceEnabled" class="queue-zone-note">Snapshot dari video ini dikirim ke FastAPI localhost. Kotak menunjukkan frame sampel terakhir sampai hasil baru tersedia atau kedaluwarsa. Posisi kendaraan mengikuti waktu frame yang tertera. Tidak ada tracking atau penyimpanan gambar.</p>
         <p v-if="detectionResult" class="queue-zone-note">{{ detectionResult.model_name }} · {{ detectionResult.inference_duration_ms }} ms · {{ detectionResult.note }}</p>
         <p v-if="detectionResult" class="queue-zone-note">Sesi {{ detectionResult.session_id }} · Frame #{{ detectionResult.frame_sequence }} · Diproses {{ detectionResult.processed_at }}</p>
         <p class="queue-zone-note">Akses file tidak disimpan permanen. Setelah refresh, pilih ulang video.</p>

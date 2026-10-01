@@ -2,10 +2,13 @@
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import AppIcon from './AppIcon.vue'
 import SimulationVehicle from './SimulationVehicle.vue'
+import { yoloMapQueues } from '../utils/yoloMapQueues.js'
+import { formatQueueValue } from '../services/aiQueueSummary.js'
 import { directionLabel, movementLabel } from '../services/sigapApi.js'
 import { MAP_DISPLAY_MODES, useMapDisplayMode } from '../composables/useMapDisplayMode.js'
 
-const props = defineProps({ apiApproaches: { type: Array, default: () => [] }, signalPhases: { type: Array, default: () => [] } })
+const props = defineProps({ apiApproaches: { type: Array, default: () => [] }, signalPhases: { type: Array, default: () => [] }, queueApproaches: { type: Array, default: () => [] } })
+const detectedLanes = computed(() => yoloMapQueues(props.queueApproaches))
 const laneCounts = computed(() => [...new Set(props.apiApproaches.map(approach => approach.lanes?.length || 0))].join('/'))
 import { colors, flows, motionPaths } from '../simulation/mapGeometry.js'
 import { advanceSimulation, cancelEvp, createSimulation, DENSITIES, DIRECTIONS, LABELS, lightFor, queuedVehicles, requestEvp, setDensity, TIMING } from '../simulation/intersectionSimulator.js'
@@ -174,7 +177,18 @@ onBeforeUnmount(() => {
           </g>
         </g>
 
-        <g class="simulation-signals">
+        <g v-if="!isSimulation" class="yolo-traffic" pointer-events="none" aria-label="Jumlah kendaraan YOLO per lajur">
+          <g v-for="lane in detectedLanes" :key="lane.id" :data-direction="lane.direction" :data-lane="lane.lane" :data-count="lane.count">
+            <title>{{ lane.label }}: {{ lane.count === null ? 'Menunggu deteksi' : `${lane.count} kendaraan` }}</title>
+            <g v-for="vehicle in lane.vehicles" :key="vehicle.id" :transform="vehicle.transform">
+              <rect x="-13" y="-7" width="26" height="14" rx="4" :fill="lane.lane === 'outer' ? '#3988ed' : '#ed873c'" stroke="#fff" stroke-width="1.5" />
+              <path d="M5-5h4v10H5Z" fill="#eaf4ff" />
+            </g>
+            <text :x="lane.x" :y="lane.y" text-anchor="middle" dominant-baseline="middle" class="yolo-lane-count">{{ formatQueueValue(lane.count) }}</text>
+          </g>
+        </g>
+
+        <g v-if="isSimulation" class="simulation-signals">
           <g v-for="signal in signals" :key="signal.direction" :transform="`translate(${signal.x} ${signal.y})`" :aria-label="`Lampu ${LABELS[signal.direction]}: ${phaseNames[lightFor(simulation, signal.direction)]}`">
             <title>{{ LABELS[signal.direction] }}: {{ phaseNames[lightFor(simulation, signal.direction)] }}</title>
             <rect x="-27" y="-11" width="54" height="22" rx="6" fill="#273951" stroke="#5c708c" stroke-width="1.4" />
@@ -200,7 +214,11 @@ onBeforeUnmount(() => {
         <p><i :style="{ background: colors[approach.color] }"></i>Kanan ke {{ approach.right }}</p>
       </div>
     </div>
-    <div class="phase-strip">
+    <div v-if="!isSimulation" class="yolo-queue-strip" role="status">
+      <p>Jumlah kendaraan dalam zona YOLO. Ikon menunjukkan jumlah per lajur; posisi pada peta bersifat skematis. Maksimal 7 ikon per lajur, angka tetap menampilkan total.</p>
+      <div v-for="queue in queueApproaches" :key="queue.approach_code"><strong>{{ queue.approach_name }}</strong><span>Luar {{ formatQueueValue(queue.outer_lane_queue) }} · Dalam {{ formatQueueValue(queue.inner_lane_queue) }}</span></div>
+    </div>
+    <div v-if="isSimulation" class="phase-strip">
       <span><AppIcon name="traffic" :size="17" /><strong>{{ isSimulation ? 'Fase Aktif' : 'Fase simulasi' }}: {{ LABELS[simulation.direction] }}</strong><span :class="['phase-state', simulation.phase]">{{ phaseNames[simulation.phase] }}</span><b class="phase-countdown">{{ countdown }} dtk</b><span class="phase-simulator">· {{ !isSimulation ? 'Simulasi dijeda' : simulation.playing ? 'Berjalan' : 'Pause' }}</span></span>
       <div class="phase-lights" aria-label="Status lampu setiap arah"><span v-for="direction in DIRECTIONS" :key="direction"><i :class="['status-dot', lightFor(simulation, direction)]"></i>{{ LABELS[direction] }} {{ phaseNames[lightFor(simulation, direction)] }}</span></div>
       <span v-if="isSimulation && simulation.phase === 'allRed' && countdown === 0" class="phase-simulator">Menunggu simpang kosong</span>
@@ -231,6 +249,10 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.yolo-lane-count { fill: #213b5b; stroke: #fff; stroke-width: 4px; paint-order: stroke; font-size: 16px; font-weight: 700; }
+.yolo-queue-strip { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0 17px 12px; font-size: 11px; color: #536984; }
+.yolo-queue-strip p { flex-basis: 100%; line-height: 1.6; margin: 0; }
+.yolo-queue-strip > div { display: flex; flex-direction: column; gap: 3px; }
 .sim-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 17px 0; }
 .map-mode-select { display: inline-flex; align-items: center; gap: 7px; color: #73849a; font-size: 10px; }
 .map-mode-select select { cursor: pointer; }

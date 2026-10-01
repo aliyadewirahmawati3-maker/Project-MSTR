@@ -115,9 +115,9 @@ def utc_now():
     return datetime.now(timezone.utc)
 
 
-def empty_result(camera_id, status="WAITING_FOR_DETECTION", note="Belum ada frame video lokal yang valid."):
+def empty_result(camera_id, status="WAITING_FOR_DETECTION", note="Belum ada frame video lokal yang valid.", model_name=MODEL_NAME):
     return {"camera_id": camera_id, "profile_id": None, "session_id": None, "source_id": None,
-            "source_type": SOURCE_TYPE, "inference_enabled": True, "model_name": MODEL_NAME,
+            "source_type": SOURCE_TYPE, "inference_enabled": True, "model_name": model_name,
             "outer_lane_queue": None, "inner_lane_queue": None, "total_queue": None,
             "status": status, "note": note, "captured_at": None, "processed_at": None,
             "expires_at": None, "video_time_seconds": None, "frame_sequence": None,
@@ -130,9 +130,11 @@ class FrameInferenceService:
         self.clock, self.now = clock, now
         self.max_age = setting("SIGAP_YOLO_MAX_AGE_SECONDS", 10., 2., 30.)
         self.min_interval = setting("SIGAP_YOLO_MIN_INTERVAL_SECONDS", 1.5, .25, 30.)
+        self.slot_timeout = setting("SIGAP_YOLO_SLOT_TIMEOUT_SECONDS", 3., .1, 5.)
         self.entries = {}  # At most four active/tombstoned camera entries.
         self.lock = threading.Lock()
-        self.inference_slot = threading.Lock()  # Fail fast; never queue inference jobs.
+        self.inference_slot = threading.Lock()
+        self.pending_cameras = set()  # At most one outstanding frame per camera (four total).
 
     def start(self, request):
         with self.lock:
@@ -170,16 +172,25 @@ class FrameInferenceService:
                 raise HTTPException(409, "Sesi/frame sudah diganti.")
             if self.clock() - entry["last_attempt"] < self.min_interval:
                 raise HTTPException(429, "Frekuensi frame terlalu tinggi; kirim frame terbaru nanti.")
-        if not self.inference_slot.acquire(blocking=False):
-            raise HTTPException(429, "Model sedang memproses kamera lain; buang frame ini.")
+            if meta.camera_id in self.pending_cameras:
+                raise HTTPException(429, "Kamera ini masih menunggu hasil frame sebelumnya.")
+            self.pending_cameras.add(meta.camera_id)
+        acquired = False
         try:
+            # A short bounded wait absorbs simultaneous snapshots without concurrent model access.
+            age = (self.now() - meta.captured_at).total_seconds()
+            acquired = self.inference_slot.acquire(timeout=min(self.slot_timeout, max(0, self.max_age - age)))
+            if not acquired:
+                raise HTTPException(429, "Model masih sibuk; kirim frame terbaru pada kesempatan berikutnya.")
             with self.lock:
                 entry = self.current(meta)
                 if entry is None or meta.frame_sequence <= entry["sequence"]:
                     raise HTTPException(409, "Sesi/frame sudah diganti.")
+                if self.clock() - entry["last_attempt"] < self.min_interval:
+                    raise HTTPException(429, "Frekuensi frame terlalu tinggi; kirim frame terbaru nanti.")
                 entry.update(sequence=meta.frame_sequence, last_attempt=self.clock())
             started = self.clock()
-            result = empty_result(meta.camera_id)
+            result = empty_result(meta.camera_id, model_name=getattr(self.detector, "model_name", MODEL_NAME))
             result.update(profile_id=meta.profile_id, session_id=str(meta.session_id), source_id=str(meta.source_id),
                           captured_at=meta.captured_at.isoformat(), video_time_seconds=meta.video_time_seconds,
                           frame_sequence=meta.frame_sequence, original_width=meta.original_width,
@@ -203,6 +214,8 @@ class FrameInferenceService:
                                   total_queue=sum(counts.values()), status="DETECTION_READY",
                                   note="Jumlah kendaraan dalam zona pada frame terbaru; bukan kumulatif atau bukti kendaraan berhenti.",
                                   ambiguous_detections=ambiguous)
+                    if getattr(self.detector, "profile", "coco") == "vehicles-v2":
+                        result["note"] += " Model vehicles-v2 menghitung mobil/bus/truk; kelas sepeda motor tidak dilatih."
                 else:
                     result.update(status="ZONE_CALIBRATION_REQUIRED", note="Deteksi umum tersedia. Cocokkan kamera/profile dan konfirmasi sudut rekaman untuk menghitung zona.")
             except HTTPException:
@@ -224,12 +237,15 @@ class FrameInferenceService:
                 entry["expires_mono"] = started + max(0, self.max_age - age)
             return self.latest(meta.camera_id, include_detections=True)
         finally:
-            self.inference_slot.release()
+            if acquired:
+                self.inference_slot.release()
+            with self.lock:
+                self.pending_cameras.discard(meta.camera_id)
 
     def latest(self, camera_id, include_detections=False):
         with self.lock:
             entry = self.entries.get(camera_id)
-            result = dict(entry["result"]) if entry and entry["active"] and entry["result"] else empty_result(camera_id)
+            result = dict(entry["result"]) if entry and entry["active"] and entry["result"] else empty_result(camera_id, model_name=getattr(self.detector, "model_name", MODEL_NAME))
             if result["captured_at"] and self.clock() >= entry["expires_mono"]:
                 result.update(outer_lane_queue=None, inner_lane_queue=None, total_queue=None,
                               status="STALE", stale=True, detections=[], note="Data kedaluwarsa; menunggu frame video terbaru.")

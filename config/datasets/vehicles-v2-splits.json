@@ -1,0 +1,11 @@
+{
+  "description": "Split by complete source recording; include daytime and nighttime recordings in training.",
+  "source_group_pattern": "^(.*(?:mp4|avi|mov|mkv))[-_]\\d+(?:_jpg|_png)?$",
+  "groups": {
+    "adit_mp4": "train",
+    "malam_04112021_mp4": "train",
+    "siang_15112021_1_mp4": "train",
+    "pagi_16112021_mp4": "valid",
+    "aditganteng_mp4": "test"
+  }
+}

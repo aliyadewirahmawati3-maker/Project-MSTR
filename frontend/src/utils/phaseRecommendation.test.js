@@ -57,3 +57,14 @@ test('durasi hijau selalu berada di antara batas minimum dan maksimum', () => {
     assert.ok(result.recommended_green_seconds <= GREEN_SECONDS.max)
   }
 })
+
+test('partial data identifies ready and missing directions without inventing empty queues', () => {
+  const result = recommendPhase(summary({ WEST: 0, EAST: 4 }))
+  assert.equal(result.data_status, 'PARTIAL_DATA')
+  assert.deepEqual(result.available_approaches, ['WEST', 'EAST'])
+  assert.deepEqual(result.missing_approaches, ['NORTH', 'SOUTH'])
+  assert.match(result.reason, /Menunggu Utara, Selatan/)
+  assert.equal(result.label, 'Data parsial (2/4 arah)')
+  assert.equal(result.recommended_green_seconds, null)
+  assert.equal(recommendPhase(summary({ WEST: 0, NORTH: 0, EAST: 4, SOUTH: 0 })).data_status, 'COMPLETE')
+})
