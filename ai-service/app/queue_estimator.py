@@ -33,9 +33,13 @@ class QueueEstimate:
     source_type: str
     status: str
     note: str
+    queue_count: int | None = None
+    lane_mode: str = "DUAL_LANE"
 
     @property
     def total(self):
+        if self.lane_mode == "SINGLE_QUEUE":
+            return self.queue_count
         if self.outer is None or self.inner is None:
             return None
         return self.outer + self.inner
@@ -66,7 +70,9 @@ def _parse_values(raw):
         if not isinstance(camera_code, str) or not isinstance(pair, dict):
             continue
         outer, inner = pair.get("outer"), pair.get("inner")
-        if _valid_count(outer) and _valid_count(inner):
+        if _valid_count(pair.get("queue_count")):
+            values[camera_code] = {"queue_count": pair["queue_count"]}
+        elif _valid_count(outer) and _valid_count(inner):
             values[camera_code] = {"outer": outer, "inner": inner}
     return values
 
@@ -137,13 +143,20 @@ def estimate_queues(cameras, root, mode=None, values=None, inspector=inspect_fir
                 f"Mode {mode} aktif, tetapi video/frame lokal belum valid; antrean tetap belum diukur ({getattr(error, 'code', 'FRAME_UNAVAILABLE')}).",
             )
             continue
-        if pair is None:
+        if pair is None or (camera.lane_mode == "SINGLE_QUEUE" and "queue_count" not in pair) or (camera.lane_mode == "DUAL_LANE" and "outer" not in pair):
             results[camera.camera_code] = QueueEstimate(
                 None, None, mode, "WAITING_FOR_DETECTION",
                 f"Mode {mode} aktif, tetapi nilai estimator lokal belum dikonfigurasi untuk kamera ini.",
             )
             continue
         label = "simulator" if mode == MODE_SIMULATOR else "estimasi offline"
+        if camera.lane_mode == "SINGLE_QUEUE":
+            results[camera.camera_code] = QueueEstimate(
+                pair["queue_count"], None, mode, "SIMULATOR",
+                f"Nilai {label} dikonfigurasi eksplisit, bukan hasil deteksi. outer_lane_queue alias queue_count; inner_lane_queue null karena tidak digunakan.",
+                queue_count=pair["queue_count"], lane_mode="SINGLE_QUEUE",
+            )
+            continue
         results[camera.camera_code] = QueueEstimate(
             pair["outer"], pair["inner"], mode, "SIMULATOR",
             f"Nilai berasal dari {label} terkontrol setelah frame lokal diverifikasi; bukan YOLO real-time atau CCTV live.",

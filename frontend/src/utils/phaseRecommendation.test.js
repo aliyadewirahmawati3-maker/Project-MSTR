@@ -68,3 +68,13 @@ test('partial data identifies ready and missing directions without inventing emp
   assert.equal(result.recommended_green_seconds, null)
   assert.equal(recommendPhase(summary({ WEST: 0, NORTH: 0, EAST: 4, SOUTH: 0 })).data_status, 'COMPLETE')
 })
+
+
+test('single queue phase recommendation consumes total_queue without either lane field', () => {
+  const rows = ['WEST', 'NORTH', 'EAST', 'SOUTH'].map((approach_code, index) => ({
+    approach_code, lane_mode: 'SINGLE_QUEUE', queue_count: [8, 1, 6, 1][index], total_queue: [8, 1, 6, 1][index],
+    outer_lane_queue: null, inner_lane_queue: null, source_type: 'YOLO_LOCAL_REALTIME',
+    status: 'DETECTION_READY', stale: false, inference_enabled: true,
+    expires_at: new Date(Date.now() + 10000).toISOString() }))
+  assert.equal(recommendPhase(rows).recommended_phase, 'WEST_EAST')
+})

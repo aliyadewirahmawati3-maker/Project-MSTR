@@ -19,7 +19,7 @@ export function videoMetadata(video) {
   if (![width, height, duration].every(value => Number.isFinite(value) && value > 0)) {
     throw new Error('Resolusi atau durasi rekaman tidak valid. Pilih video lain dengan metadata yang dapat dibaca.')
   }
-  return { width, height, duration }
+  return { width, height, aspect_ratio: width / height, duration }
 }
 
 export function formatDuration(seconds) {

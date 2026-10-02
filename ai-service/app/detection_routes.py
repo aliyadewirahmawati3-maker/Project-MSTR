@@ -31,7 +31,7 @@ def stop_session(camera_id: CameraCode, session_id: UUID):
              openapi_extra={"requestBody": {"required": True, "content": {
                  "image/jpeg": {"schema": {"type": "string", "format": "binary"}},
                  "image/png": {"schema": {"type": "string", "format": "binary"}}}}})
-async def detect_frame(request: Request, x_frame_metadata: Annotated[str, Header(description="JSON FrameMetadata: camera/session/source IDs, sequence, capture/video time, original/snapshot dimensions, profile and calibration.")]):
+async def detect_frame(request: Request, x_frame_metadata: Annotated[str, Header(description="JSON FrameMetadata: camera/session/source IDs, sequence, capture/video time, original/snapshot dimensions, profile, calibration_confirmed, lane_mode, active_zones [{lane_type, polygon}] in normalized original-frame coordinates.")]):
     if len(x_frame_metadata) > 4096:
         raise HTTPException(413, "Metadata terlalu besar.")
     try:

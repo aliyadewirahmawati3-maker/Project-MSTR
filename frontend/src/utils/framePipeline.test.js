@@ -142,11 +142,11 @@ test('sampling interval includes processing time instead of adding another full 
   let time = 0
   const delays = []
   const { pipeline } = fixture(t, { detect: async meta => {
-    time += 1600
+    time += 600
     return { ...meta, status: 'DETECTION_READY' }
   } }, { now: () => time, schedule: (_, ms) => { delays.push(ms); return delays.length }, cancel: () => {} })
   pipeline.start(); await settle()
-  assert.ok(delays.at(-1) >= 400 && delays.at(-1) < 650)
+  assert.ok(delays.at(-1) >= 400 && delays.at(-1) < 425)
 })
 
 test('waiting for other cameras does not consume the server minimum interval', async t => {
@@ -161,4 +161,46 @@ test('waiting for other cameras does not consume the server minimum interval', a
   }, { now: () => time, schedule: (_, ms) => { delays.push(ms); return delays.length }, cancel: () => {} })
   pipeline.start(); await settle()
   assert.ok(delays.at(-1) >= 1300 && delays.at(-1) < 1550)
+})
+
+test('2 FPS adapts only after a timely result and falls back after a slow request', async t => {
+  let time = 0, latency = 200
+  const delays = [], states = []
+  const { pipeline } = fixture(t, { detect: async meta => {
+    time += latency
+    return { ...meta, status: 'DETECTION_READY', inference_duration_ms: latency }
+  } }, { intervalMs: 500, fps: () => 2, now: () => time, changed: state => states.push(state),
+    schedule: (_, ms) => { delays.push(ms); return delays.length }, cancel: () => {} })
+  pipeline.start(); await settle()
+  assert.equal(states.at(-1).intervalMs, 500)
+  assert.ok(delays.at(-1) >= 300 && delays.at(-1) < 325)
+  latency = 800
+  await pipeline.tick()
+  assert.equal(states.at(-1).intervalMs, 1000)
+  assert.equal(states.at(-1).status, 'INFERENCE_SLOW')
+  assert.equal(states.at(-1).result.status, 'DETECTION_READY')
+  assert.ok(delays.at(-1) >= 200 && delays.at(-1) < 225)
+})
+
+test('pending request shows slow status, preserves prior frame and drops ticks without capture', async t => {
+  let pending, first = true, captures = 0
+  const timers = new Map(), states = []
+  let serial = 0
+  const { pipeline } = fixture(t, { detect: meta => {
+    if (first) { first = false; return Promise.resolve({ ...meta, status: 'DETECTION_READY' }) }
+    return new Promise(resolve => { pending = () => resolve({ ...meta, status: 'DETECTION_READY' }) })
+  } }, { changed: state => states.push(state),
+    capture: async () => { captures++; return { metadata: {}, blob: 'fixture' } },
+    schedule: (fn, ms) => { const id = ++serial; timers.set(id, { fn, ms }); return id }, cancel: id => timers.delete(id) })
+  pipeline.start(); await settle()
+  const prior = states.at(-1).result
+  const running = pipeline.tick(); await settle()
+  assert.equal(states.at(-1).status, 'DETECTING')
+  assert.equal(states.at(-1).result, prior)
+  const slow = [...timers.values()].find(timer => timer.ms === 1000)
+  slow.fn()
+  assert.equal(states.at(-1).status, 'INFERENCE_SLOW')
+  for (let i = 0; i < 50; i++) await pipeline.tick()
+  assert.equal(captures, 2)
+  pending(); await running
 })

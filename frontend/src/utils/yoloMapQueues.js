@@ -15,14 +15,14 @@ const positions = {
 export function yoloMapQueues(approaches, now = Date.now()) {
   return DIRECTIONS.flatMap(direction => {
     const row = approaches.find(item => item.approach_code === direction)
-    return ['outer', 'inner'].map(lane => {
-      const value = row?.[`${lane}_lane_queue`]
+    return (row?.lane_mode === 'SINGLE_QUEUE' ? ['queue'] : ['outer', 'inner']).map(lane => {
+      const value = lane === 'queue' ? row?.queue_count : row?.[`${lane}_lane_queue`]
       const count = freshYoloResult(row, now) && Number.isInteger(value) && value >= 0 ? value : null
       const visible = count === null ? 0 : Math.min(count, MAX_MAP_VEHICLES_PER_LANE)
       const [x, y] = positions[direction](lane, 0)
       return {
         id: `${direction}-${lane}`, direction, lane, count,
-        label: `${NAMES[direction]} · ${lane === 'outer' ? 'Luar' : 'Dalam'}`,
+        label: `${NAMES[direction]} · ${lane === 'queue' ? 'Antrean' : lane === 'outer' ? 'Luar' : 'Dalam'}`,
         x: x + (['NORTH', 'SOUTH'].includes(direction) ? 0 : direction === 'WEST' ? 18 : -18),
         y: y + (['WEST', 'EAST'].includes(direction) ? 0 : direction === 'NORTH' ? 18 : -18),
         vehicles: Array.from({ length: visible }, (_, index) => {

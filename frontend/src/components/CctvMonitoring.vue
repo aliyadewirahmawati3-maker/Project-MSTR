@@ -9,8 +9,8 @@ const cameras = queueZones.cameras
 <template>
   <section id="live-monitoring" class="card cctv-card" tabindex="-1" aria-labelledby="cctv-title">
     <div class="card-heading">
-      <div><h2 id="cctv-title">Live Monitoring CCTV <span class="title-separator">—</span> 4 Arah</h2><p>Rekaman lokal · bukan CCTV live</p></div>
-      <span class="badge badge-neutral">Offline demo</span>
+      <div><h2 id="cctv-title">Monitoring CCTV <span class="title-separator">/</span> Rekaman Lokal</h2><p>Pilih video per kamera untuk pemantauan dan deteksi lokal.</p></div>
+      <span class="badge badge-neutral">Sumber video lokal</span>
     </div>
     <div class="cctv-grid">
       <LocalCctvCamera v-for="camera in cameras" :key="camera.camera_code" :camera="camera" />

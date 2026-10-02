@@ -203,3 +203,13 @@ test('frame results immediately update queues; late polls cannot regress or resu
   sessions['CAM-W-01'] = { session_id: 'new', source_id: 'new-video' }
   assert.equal(queues.approaches.value[0].total_queue, null)
 })
+
+
+test('single queue summary preserves mode and counts and rejects inconsistent totals', () => {
+  const input = payload(['WEST', 'NORTH', 'EAST', 'SOUTH'].map(code => approach(code, {
+    lane_mode: 'SINGLE_QUEUE', queue_count: 3, outer_lane_queue: 3, inner_lane_queue: null, total_queue: 3 })))
+  const rows = normalizeQueueSummary(input).approaches
+  assert.ok(rows.every(row => row.lane_mode === 'SINGLE_QUEUE' && row.queue_count === row.total_queue && row.inner_lane_queue === null))
+  input.approaches[0].total_queue = 5
+  assert.throws(() => normalizeQueueSummary(input), /tidak konsisten/)
+})

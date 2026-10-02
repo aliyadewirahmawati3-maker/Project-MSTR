@@ -45,7 +45,7 @@ test('ready status requires readable frame and real media metadata; pause does n
   assert.equal(r.state.value, 'loading')
   assert.ok(r.ready(video, r.version.value))
   assert.equal(r.status.value, 'Rekaman lokal siap — menunggu analisis AI')
-  assert.deepEqual(r.metadata.value, { width: 1920, height: 1080, duration: 25.067 })
+  assert.deepEqual(r.metadata.value, { width: 1920, height: 1080, aspect_ratio: 1920 / 1080, duration: 25.067 })
   r.setPlayback('Rekaman dijeda · tekan Putar', r.version.value)
   assert.equal(r.state.value, 'ready')
   assert.match(r.playback.value, /dijeda/)

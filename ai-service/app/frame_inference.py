@@ -1,5 +1,6 @@
 """Bounded in-memory snapshot sessions and latest-frame zone occupancy."""
 
+from dataclasses import replace
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 import logging
@@ -12,7 +13,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, AwareDatetime
 
-from app.local_video import CAMERAS, InputError, load_inputs, on_segment
+from app.local_video import CAMERAS, InputError, load_inputs, on_segment, QueueZone, validate_polygon, RULES
 from app.yolo_detector import MODEL_NAME, ModelUnavailable, YoloDetector, setting
 
 CameraCode = Literal["CAM-W-01", "CAM-N-01", "CAM-E-01", "CAM-S-01"]
@@ -29,6 +30,12 @@ class SessionInput(BaseModel):
     revision: int = Field(gt=0, strict=True)
 
 
+class ActiveZone(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    lane_type: Literal["queue", "outer", "inner"]
+    polygon: list[list[float]] = Field(min_length=3, max_length=64)
+
+
 class FrameMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     camera_id: CameraCode
@@ -39,6 +46,9 @@ class FrameMetadata(BaseModel):
     input_camera_code: CameraCode | None = None
     source_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     calibration_confirmed: bool = False
+    lane_mode: Literal["SINGLE_QUEUE", "DUAL_LANE"] | None = None
+    queue_polygon: list[list[float]] | None = Field(default=None, min_length=3, max_length=64)
+    active_zones: list[ActiveZone] | None = Field(default=None, min_length=1, max_length=2)
     captured_at: AwareDatetime
     video_time_seconds: float = Field(ge=0, le=864000)
     original_width: int = Field(ge=16, le=8192, strict=True)
@@ -81,12 +91,14 @@ def point_in_polygon(point, polygon):
 
 
 def count_zones(detections, camera):
-    counts = {"outer": 0, "inner": 0}
+    counts = {"queue": 0} if camera.lane_mode == "SINGLE_QUEUE" else {"outer": 0, "inner": 0}
     ambiguous = 0
     for detection in detections:
         x1, _, x2, y2 = detection["bbox"]
         lanes = [zone.lane_type for zone in camera.zones if point_in_polygon(((x1 + x2) / 2, y2), zone.polygon)]
         detection["lane_type"] = lanes[0] if len(lanes) == 1 else None
+        detection["in_queue_zone"] = len(lanes) == 1
+        detection["lane_zone"] = detection["lane_type"]
         if len(lanes) == 1:
             counts[lanes[0]] += 1
         elif len(lanes) > 1:
@@ -104,9 +116,32 @@ def valid_profile(cameras, meta):
             return None
     elif not meta.calibration_confirmed:
         return None
+    custom_zones = meta.active_zones
+    if meta.queue_polygon is not None:
+        if custom_zones is not None or meta.lane_mode != "SINGLE_QUEUE":
+            return None
+        custom_zones = [ActiveZone(lane_type="queue", polygon=meta.queue_polygon)]
+    if custom_zones is not None:
+        if not meta.calibration_confirmed or meta.lane_mode is None:
+            return None
+        expected = {"queue"} if meta.lane_mode == "SINGLE_QUEUE" else {"outer", "inner"}
+        if len(custom_zones) != len(expected) or {z.lane_type for z in custom_zones} != expected:
+            return None
+        try:
+            for zone in custom_zones:
+                validate_polygon(zone.polygon)
+        except InputError:
+            return None
+        # A manually confirmed polygon belongs to this decoded recording's dimensions.
+        camera = replace(camera, width=meta.original_width, height=meta.original_height,
+                         lane_mode=meta.lane_mode, zones=tuple(QueueZone(
+                             f"{camera.camera_code}-{z.lane_type}", z.lane_type,
+                             RULES[z.lane_type], tuple(map(tuple, z.polygon))) for z in custom_zones))
     try:
         camera.pixel_zones(meta.original_width, meta.original_height, meta.input_camera_code)
     except InputError:
+        return None
+    if meta.lane_mode is not None and meta.lane_mode != camera.lane_mode:
         return None
     return camera
 
@@ -118,6 +153,7 @@ def utc_now():
 def empty_result(camera_id, status="WAITING_FOR_DETECTION", note="Belum ada frame video lokal yang valid.", model_name=MODEL_NAME):
     return {"camera_id": camera_id, "profile_id": None, "session_id": None, "source_id": None,
             "source_type": SOURCE_TYPE, "inference_enabled": True, "model_name": model_name,
+            "lane_mode": "DUAL_LANE", "queue_count": None,
             "outer_lane_queue": None, "inner_lane_queue": None, "total_queue": None,
             "status": status, "note": note, "captured_at": None, "processed_at": None,
             "expires_at": None, "video_time_seconds": None, "frame_sequence": None,
@@ -128,13 +164,12 @@ class FrameInferenceService:
     def __init__(self, detector=None, clock=time.monotonic, now=utc_now):
         self.detector = detector or YoloDetector()
         self.clock, self.now = clock, now
-        self.max_age = setting("SIGAP_YOLO_MAX_AGE_SECONDS", 10., 2., 30.)
-        self.min_interval = setting("SIGAP_YOLO_MIN_INTERVAL_SECONDS", 1.5, .25, 30.)
-        self.slot_timeout = setting("SIGAP_YOLO_SLOT_TIMEOUT_SECONDS", 3., .1, 5.)
+        self.max_age = setting("SIGAP_YOLO_MAX_AGE_SECONDS", 2., 2., 30.)
+        self.min_interval = setting("SIGAP_YOLO_MIN_INTERVAL_SECONDS", .5, .5, 30.)
         self.entries = {}  # At most four active/tombstoned camera entries.
         self.lock = threading.Lock()
         self.inference_slot = threading.Lock()
-        self.pending_cameras = set()  # At most one outstanding frame per camera (four total).
+        self.pending_cameras = set()  # One admitted operation per camera; no waiting frame queue.
 
     def start(self, request):
         with self.lock:
@@ -177,9 +212,8 @@ class FrameInferenceService:
             self.pending_cameras.add(meta.camera_id)
         acquired = False
         try:
-            # A short bounded wait absorbs simultaneous snapshots without concurrent model access.
-            age = (self.now() - meta.captured_at).total_seconds()
-            acquired = self.inference_slot.acquire(timeout=min(self.slot_timeout, max(0, self.max_age - age)))
+            # A busy model drops this snapshot immediately. Never process queued, aging frames.
+            acquired = self.inference_slot.acquire(blocking=False)
             if not acquired:
                 raise HTTPException(429, "Model masih sibuk; kirim frame terbaru pada kesempatan berikutnya.")
             with self.lock:
@@ -201,19 +235,25 @@ class FrameInferenceService:
                 raise HTTPException(422, "Waktu capture tidak valid atau frame telah kedaluwarsa.")
             try:
                 frame = decode_frame(content, meta)
-                detections = self.detector.predict(frame)
-                result["detections"] = detections
                 try:
                     cameras = load_inputs(os.getenv("SIGAP_QUEUE_ZONES_PATH", "/config/cctv/queue_zones.json"))
                     camera = valid_profile(cameras, meta)
                 except (OSError, ValueError, KeyError, TypeError, OverflowError):
                     camera = None
+                result["lane_mode"] = camera.lane_mode if camera else meta.lane_mode or "DUAL_LANE"
+                detections = self.detector.predict(frame)
+                for detection in detections:
+                    detection.update(in_queue_zone=False, lane_zone=None, lane_type=None)
+                result["detections"] = detections
                 if camera:
                     counts, ambiguous = count_zones(detections, camera)
-                    result.update(outer_lane_queue=counts["outer"], inner_lane_queue=counts["inner"],
+                    result.update(lane_mode=camera.lane_mode, queue_count=sum(counts.values()),
+                                  outer_lane_queue=counts.get("outer", counts.get("queue")), inner_lane_queue=counts.get("inner"),
                                   total_queue=sum(counts.values()), status="DETECTION_READY",
                                   note="Jumlah kendaraan dalam zona pada frame terbaru; bukan kumulatif atau bukti kendaraan berhenti.",
                                   ambiguous_detections=ambiguous)
+                    if camera.lane_mode == "SINGLE_QUEUE":
+                        result["note"] += " outer_lane_queue alias queue_count untuk kompatibilitas; inner_lane_queue null karena zona dalam tidak digunakan."
                     if getattr(self.detector, "profile", "coco") == "vehicles-v2":
                         result["note"] += " Model vehicles-v2 menghitung mobil/bus/truk; kelas sepeda motor tidak dilatih."
                 else:
@@ -247,7 +287,7 @@ class FrameInferenceService:
             entry = self.entries.get(camera_id)
             result = dict(entry["result"]) if entry and entry["active"] and entry["result"] else empty_result(camera_id, model_name=getattr(self.detector, "model_name", MODEL_NAME))
             if result["captured_at"] and self.clock() >= entry["expires_mono"]:
-                result.update(outer_lane_queue=None, inner_lane_queue=None, total_queue=None,
+                result.update(queue_count=None, outer_lane_queue=None, inner_lane_queue=None, total_queue=None,
                               status="STALE", stale=True, detections=[], note="Data kedaluwarsa; menunggu frame video terbaru.")
             if not include_detections:
                 result.pop("detections", None)

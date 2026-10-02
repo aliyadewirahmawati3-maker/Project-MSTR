@@ -177,3 +177,25 @@ def test_endpoint_exposes_simulator_values_without_detection_fields(config, clie
     serialized = json.dumps(body).lower()
     for forbidden in ("tracking_id", "ocr", "plat_nomor", "wajah"):
         assert forbidden not in serialized
+
+
+def test_single_queue_offline_requires_explicit_single_value(config, client, monkeypatch):
+    from dataclasses import replace
+    from app.local_video import load_inputs
+    path, data = config
+    camera = data['cameras'][0]
+    camera['lane_mode'] = 'SINGLE_QUEUE'
+    camera['zones'] = [{**camera['zones'][0], 'lane_type': 'queue', 'movement_rules': 'QUEUE',
+                        'zone_id': camera['camera_code'] + '-queue'}]
+    path.write_text(json.dumps(data))
+    row = client.get(URL).json()['approaches'][0]
+    assert row['lane_mode'] == 'SINGLE_QUEUE'
+    assert row['queue_count'] is None and row['total_queue'] is None
+    camera = load_inputs(path)[0]
+    old = estimate_queues([camera], '.', MODE_OFFLINE_ESTIMATION,
+        {'CAM-W-01': {'outer': 4, 'inner': 3}}, inspector=lambda *_: {})['CAM-W-01']
+    assert old.total is None
+    explicit = estimate_queues([camera], '.', MODE_OFFLINE_ESTIMATION,
+        {'CAM-W-01': {'queue_count': 4}}, inspector=lambda *_: {})['CAM-W-01']
+    assert explicit.total == explicit.queue_count == explicit.outer == 4
+    assert explicit.inner is None

@@ -11,7 +11,7 @@ import re
 import sys
 
 CAMERAS = {"CAM-W-01": "WEST", "CAM-N-01": "NORTH", "CAM-E-01": "EAST", "CAM-S-01": "SOUTH"}
-RULES = {"outer": "LEFT_OR_STRAIGHT", "inner": "STRAIGHT_OR_RIGHT"}
+RULES = {"outer": "LEFT_OR_STRAIGHT", "inner": "STRAIGHT_OR_RIGHT", "queue": "QUEUE"}
 
 
 class InputError(ValueError):
@@ -95,6 +95,7 @@ class CameraInput:
     profile_id: str
     registered_sources: tuple
     aspect_ratio_tolerance: float
+    lane_mode: str = "DUAL_LANE"
 
     def resolve_file(self, root):
         root = Path(root).resolve(strict=True)
@@ -176,8 +177,11 @@ def load_inputs(config_path):
         reference = camera["reference_frame_seconds"]
         require(finite(reference) and 0 <= reference < expected["frame_count"] / expected["fps"], "Reference frame out of bounds")
         zones = camera["zones"]
-        require(isinstance(zones, list) and len(zones) == 2 and all(isinstance(z, dict) for z in zones)
-                and {z["lane_type"] for z in zones} == set(RULES), f"{code}: exactly outer and inner required")
+        lane_mode = camera.get("lane_mode", "DUAL_LANE")
+        require(lane_mode in {"SINGLE_QUEUE", "DUAL_LANE"}, "Invalid lane mode")
+        lanes = {"queue"} if lane_mode == "SINGLE_QUEUE" else {"outer", "inner"}
+        require(isinstance(zones, list) and len(zones) == len(lanes) and all(isinstance(z, dict) for z in zones)
+                and {z["lane_type"] for z in zones} == lanes, f"{code}: zones must match lane_mode")
         parsed = []
         for zone in zones:
             lane = zone["lane_type"]
@@ -186,7 +190,7 @@ def load_inputs(config_path):
             parsed.append(QueueZone(zone["zone_id"], lane, zone["movement_rules"], tuple(map(tuple, zone["polygon"]))))
         result.append(CameraInput(code, direction, filename, digest, ref["width"], ref["height"],
                                   expected["fps"], expected["frame_count"], reference, tuple(parsed),
-                                  camera["profile_id"], tuple(identities), tolerance))
+                                  camera["profile_id"], tuple(identities), tolerance, lane_mode))
     return tuple(result)
 
 

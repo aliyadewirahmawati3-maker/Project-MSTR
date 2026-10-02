@@ -56,7 +56,7 @@ class YoloDetector:
         self.model_name = "YOLOv13-N (vehicles v2, car/bus/truck)" if self.profile == "vehicles-v2" else MODEL_NAME
         self.covered_classes = []
         self.device = os.getenv("SIGAP_YOLO_DEVICE", "cpu")
-        self.confidence = setting("SIGAP_YOLO_CONFIDENCE", .25, .01, .99)
+        self.confidence = setting("SIGAP_YOLO_CONFIDENCE", .45, .01, .99)
         self.image_size = int(setting("SIGAP_YOLO_IMAGE_SIZE", 640, 320, 960)) // 32 * 32
 
     def load(self):

@@ -37,3 +37,13 @@ test('four approach counts map only to their incoming lanes', () => {
     'translate(502 451) rotate(180)', 'translate(322 502) rotate(-90)',
   ])
 })
+
+
+test('single queue map exposes one Antrean per direction without lane labels', () => {
+  const rows = ['WEST', 'NORTH', 'EAST', 'SOUTH'].map(approach_code => ({ ...row, approach_code,
+    lane_mode: 'SINGLE_QUEUE', queue_count: 2, total_queue: 2, outer_lane_queue: null, inner_lane_queue: null }))
+  const queues = yoloMapQueues(rows, now)
+  assert.equal(queues.length, 4)
+  assert.ok(queues.every(queue => queue.count === 2 && queue.lane === 'queue' && queue.label.includes('Antrean')))
+  assert.ok(queues.every(queue => !/Luar|Dalam/.test(queue.label)))
+})

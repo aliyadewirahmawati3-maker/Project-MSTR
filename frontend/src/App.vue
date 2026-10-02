@@ -1,4 +1,5 @@
 <script setup>
+import { queueDisplayRows } from './utils/laneMode.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref } from 'vue'
 import { useLocalInference } from './composables/useLocalInference.js'
 import { useDashboardConfiguration } from './composables/useDashboardConfiguration.js'
@@ -151,6 +152,11 @@ onBeforeUnmount(() => {
       </section>
 
       <div class="dashboard-body">
+        <section class="mode-overview" aria-label="Mode dan status sistem">
+          <div><span class="mode-label">Mode sistem · konfigurasi API</span><strong>{{ systemMode }}</strong><span>Kontrol lampu simulator</span></div>
+          <div><span class="mode-label">Mode deteksi / visualisasi</span><strong>{{ detectionMode }}</strong><span>Inferensi lokal: {{ localDetectionStatus }}</span></div>
+          <div><span class="mode-label">Sumber ringkasan antrean</span><strong :class="['badge', `badge-${queueSource.variant}`]">{{ queueSource.label }}</strong><span>Rekomendasi ditinjau operator</span></div>
+        </section>
         <div class="summary-grid">
           <section class="card operation-card" aria-labelledby="operation-title">
             <div class="summary-heading"><h2 id="operation-title">Status Operasional Simpang</h2><span class="summary-meta">{{ lastChecked ? `${lastChecked} WIB` : 'Menunggu status' }}</span></div>
@@ -166,17 +172,17 @@ onBeforeUnmount(() => {
             <p class="queue-summary-note" role="status">{{ queueSource.help }}</p>
             <div class="queue-metrics" :aria-busy="queueLoading">
               <div v-for="queue in queueApproaches" :key="queue.approach_code" class="queue-metric" :title="queue.note">
-                <div><span>{{ queue.approach_name }}</span><strong>{{ formatQueueValue(queue.total_queue) }}</strong></div>
+                <div><span>{{ queue.approach_name }}</span><strong>{{ formatQueueValue(queue.total_queue) }}<small>kendaraan</small></strong></div>
                 <div class="queue-indicator" aria-hidden="true"><i v-for="segment in 12" :key="segment" :class="{ active: Number.isFinite(queue.total_queue) && segment <= Math.min(12, queue.total_queue) }"></i></div>
-                <p>Luar: {{ formatQueueValue(queue.outer_lane_queue) }}</p>
-                <p>Dalam: {{ formatQueueValue(queue.inner_lane_queue) }}</p><p v-if="!localInference.map.isSimulation.value && queue.total_queue === null">{{ inferenceLabel(queue.status) }}</p>
+                <p v-for="item in queueDisplayRows(queue)" :key="item.label">{{ item.label }}: {{ formatQueueValue(item.value) }}</p>
+                <p v-if="!localInference.map.isSimulation.value && queue.total_queue === null">{{ inferenceLabel(queue.status) }}</p>
               </div>
             </div>
           </section>
         </div>
 
         <div class="main-grid">
-          <IntersectionMap :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" :queue-approaches="queueApproaches" />
+          <IntersectionMap :intersection-name="configuration?.intersection.name || 'Konfigurasi simpang'" :api-approaches="configuration?.approaches || []" :signal-phases="configuration?.signalPhases || []" :queue-approaches="queueApproaches" />
           <div class="decision-column">
             <section id="rekomendasi-ai" class="card recommendation-card" tabindex="-1" aria-labelledby="recommendation-title">
               <div class="card-heading"><div class="heading-with-icon"><span class="icon-tile blue"><AppIcon name="spark" :size="19" /></span><div><h2 id="recommendation-title">Rekomendasi AI / Heuristik</h2><p>Pendukung keputusan operator</p></div></div><span :class="['badge', `badge-${queueSource.variant}`]">{{ queueSource.label }}</span></div>

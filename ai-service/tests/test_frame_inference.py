@@ -178,7 +178,6 @@ def test_replacement_and_late_response_cannot_restore_previous_session(setup):
 
 def test_single_inference_slot_frequency_sequence_and_stop(setup):
     service, _, _, meta, content, elapsed, _ = setup
-    service.slot_timeout = .05
     service.inference_slot.acquire()
     try:
         with pytest.raises(HTTPException) as error:
@@ -200,17 +199,18 @@ def test_single_inference_slot_frequency_sequence_and_stop(setup):
     assert service.latest(meta.camera_id)["total_queue"] is None
 
 
-def test_four_simultaneous_cameras_wait_and_each_gets_a_result(setup):
+def test_four_simultaneous_cameras_drop_busy_frames_without_queue(setup):
     service, detector, _, meta, content, _, registration = setup
-    service.slot_timeout = 2
     barrier = Barrier(4)
+    entered, release = Event(), Event()
     active = 0
     peak = 0
     def predict(frame):
         nonlocal active, peak
         active += 1
         peak = max(peak, active)
-        time.sleep(.05)
+        entered.set()
+        assert release.wait(5)
         active -= 1
         return []
     detector.predict = predict
@@ -223,58 +223,95 @@ def test_four_simultaneous_cameras_wait_and_each_gets_a_result(setup):
             "input_camera_code": camera.camera_code, "source_sha256": camera.source_sha256}))
     def send(frame):
         barrier.wait(timeout=5)
-        return service.detect(frame, content)
+        try:
+            return service.detect(frame, content)
+        except HTTPException as error:
+            return error.status_code
     with ThreadPoolExecutor(max_workers=4) as pool:
-        results = list(pool.map(send, frames))
-    assert {row["camera_id"] for row in results} == {c.camera_code for c in load_inputs(CONFIG)}
-    assert all(row["status"] == "DETECTION_READY" for row in results)
+        futures = [pool.submit(send, frame) for frame in frames]
+        assert entered.wait(5)
+        try:
+            deadline = time.monotonic() + 2
+            while sum(f.done() for f in futures) < 3 and time.monotonic() < deadline:
+                time.sleep(.005)
+            assert sum(f.done() for f in futures) == 3
+        finally:
+            release.set()
+        results = [f.result(timeout=5) for f in futures]
+    assert results.count(429) == 3
+    assert sum(isinstance(row, dict) and row["status"] == "DETECTION_READY" for row in results) == 1
     assert peak == 1
     assert not service.pending_cameras
 
 
-def test_waiting_camera_rejects_duplicates_and_rechecks_session_before_inference(setup):
+def test_processing_camera_rejects_duplicates_and_replacement_discards_old_result(setup):
     service, detector, _, meta, content, _, registration = setup
-    service.slot_timeout = 2
-    service.inference_slot.acquire()
+    entered, release = Event(), Event()
+    def predict(frame):
+        entered.set()
+        assert release.wait(5)
+        return []
+    detector.predict = predict
     with ThreadPoolExecutor(max_workers=1) as pool:
         pending = pool.submit(service.detect, meta, content)
+        assert entered.wait(5)
         try:
-            deadline = time.monotonic() + 1
-            while meta.camera_id not in service.pending_cameras and time.monotonic() < deadline:
-                time.sleep(.005)
             assert meta.camera_id in service.pending_cameras
             with pytest.raises(HTTPException) as error:
                 service.detect(meta.model_copy(update={"frame_sequence": 2}), content)
             assert error.value.status_code == 429
             service.start(registration.model_copy(update={"revision": 2, "source_id": uuid4()}))
         finally:
-            service.inference_slot.release()
+            release.set()
         with pytest.raises(HTTPException) as error:
             pending.result(timeout=5)
         assert error.value.status_code == 409
-    assert detector.calls == 0
     assert not service.pending_cameras
 
 
-def test_frame_that_expires_while_waiting_never_runs_detector(setup):
+def test_frame_that_expires_before_or_during_processing_never_feeds_queues(setup):
     service, detector, _, meta, content, elapsed, _ = setup
-    service.slot_timeout = 2
-    service.inference_slot.acquire()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        pending = pool.submit(service.detect, meta, content)
-        try:
-            deadline = time.monotonic() + 1
-            while meta.camera_id not in service.pending_cameras and time.monotonic() < deadline:
-                time.sleep(.005)
-            assert meta.camera_id in service.pending_cameras
-            elapsed[0] = service.max_age + 1
-        finally:
-            service.inference_slot.release()
-        with pytest.raises(HTTPException) as error:
-            pending.result(timeout=5)
-        assert error.value.status_code == 422
+    elapsed[0] = service.max_age + 1
+    with pytest.raises(HTTPException) as error:
+        service.detect(meta, content)
+    assert error.value.status_code == 422
     assert detector.calls == 0
     assert not service.pending_cameras
+    elapsed[0] = 0
+    service.entries[meta.camera_id]["last_attempt"] = float('-inf')
+    def slow_predict(frame):
+        elapsed[0] += service.max_age + 1
+        return [{"class_name": "car", "confidence": .9, "bbox": [.1, .1, .2, .3]}]
+    detector.predict = slow_predict
+    result = service.detect(meta.model_copy(update={"frame_sequence": 2}), content)
+    assert result["status"] == "STALE" and result["stale"]
+    assert result["total_queue"] is None and result["detections"] == []
+    assert service.latest(meta.camera_id)["total_queue"] is None
+
+
+def test_default_capacity_is_two_fps_and_age_two_seconds(monkeypatch):
+    monkeypatch.delenv("SIGAP_YOLO_MIN_INTERVAL_SECONDS", raising=False)
+    monkeypatch.delenv("SIGAP_YOLO_MAX_AGE_SECONDS", raising=False)
+    monkeypatch.delenv("SIGAP_YOLO_CONFIDENCE", raising=False)
+    service = FrameInferenceService(DetectorFixture())
+    assert service.min_interval == .5
+    assert service.max_age == 2
+    assert YoloDetector().confidence == .45
+
+
+def test_second_frame_at_half_second_replaces_latest_valid_result(setup):
+    service, _, _, meta, content, elapsed, _ = setup
+    service.min_interval = .5
+    service.detect(meta, content)
+    elapsed[0] = .49
+    with pytest.raises(HTTPException) as error:
+        service.detect(meta.model_copy(update={"frame_sequence": 2}), content)
+    assert error.value.status_code == 429
+    assert service.latest(meta.camera_id)["frame_sequence"] == 1
+    elapsed[0] = .5
+    updated = meta.model_copy(update={"frame_sequence": 2, "captured_at": service.now(), "video_time_seconds": 5.5})
+    assert service.detect(updated, content)["frame_sequence"] == 2
+    assert service.latest(meta.camera_id)["video_time_seconds"] == 5.5
 
 
 def test_http_validation_and_openapi(setup):
@@ -302,3 +339,103 @@ def test_simulator_and_yolo_caches_are_separate(setup, monkeypatch):
     service.detect(meta, content)
     assert client.get('/local-video/queue-summary?mode=YOLO_LOCAL_REALTIME').json()['approaches'][0]['total_queue'] == 0
     assert client.get('/local-video/queue-summary').json()['approaches'][0]['total_queue'] == 16
+
+
+def test_single_queue_summary_counts_main_polygon_only(setup, monkeypatch, tmp_path):
+    service, detector, client, meta, content, *_ = setup
+    data = json.loads(CONFIG.read_text())
+    camera = data['cameras'][0]
+    camera['lane_mode'] = 'SINGLE_QUEUE'
+    camera['zones'] = [{'zone_id': camera['camera_code'] + '-queue', 'lane_type': 'queue',
+        'movement_rules': 'QUEUE', 'polygon': [[0, 0], [.5, 0], [.5, 1], [0, 1]]}]
+    path = tmp_path / 'single.json'
+    path.write_text(json.dumps(data))
+    monkeypatch.setenv('SIGAP_QUEUE_ZONES_PATH', str(path))
+    detector.results = [{'bbox': [.1, .1, .3, .8]}, {'bbox': [.7, .1, .9, .8]},
+                        {'bbox': [.4, .1, .8, .8]}]
+    result = service.detect(meta, content)
+    assert result['lane_mode'] == 'SINGLE_QUEUE'
+    assert result['queue_count'] == result['total_queue'] == result['outer_lane_queue'] == 1
+    assert result['inner_lane_queue'] is None
+    assert len(result['detections']) == 3
+    assert [d['lane_type'] for d in result['detections']] == ['queue', None, None]
+    row = client.get('/local-video/queue-summary?mode=YOLO_LOCAL_REALTIME').json()['approaches'][0]
+    for field in ['lane_mode', 'queue_count', 'outer_lane_queue', 'inner_lane_queue', 'total_queue', 'status', 'note']:
+        assert row[field] == result[field]
+    setup[5][0] = 3
+    assert service.latest(meta.camera_id)['queue_count'] is None
+
+
+def test_browser_single_queue_calibration_updates_server_summary(setup):
+    service, detector, client, meta, content, *_ = setup
+    meta = meta.model_copy(update={'lane_mode': 'SINGLE_QUEUE', 'calibration_confirmed': True,
+        'queue_polygon': [[0, 0], [.5, 0], [.5, 1], [0, 1]]})
+    detector.results = [{'bbox': [.1, .1, .3, .8]}, {'bbox': [.7, .1, .9, .8]}]
+    result = service.detect(meta, content)
+    assert result['total_queue'] == result['queue_count'] == 1
+    row = client.get('/local-video/queue-summary?mode=YOLO_LOCAL_REALTIME').json()['approaches'][0]
+    assert row['lane_mode'] == 'SINGLE_QUEUE'
+    assert row['queue_count'] == 1
+
+
+@pytest.mark.parametrize('mode,zones,expected_lanes', [
+    ('SINGLE_QUEUE', [{'lane_type': 'queue', 'polygon': [[0, 0], [.5, 0], [.5, 1], [0, 1]]}], ['queue', None, None]),
+    ('DUAL_LANE', [{'lane_type': 'outer', 'polygon': [[0, 0], [.3, 0], [.3, 1], [0, 1]]},
+                   {'lane_type': 'inner', 'polygon': [[.6, 0], [1, 0], [1, 1], [.6, 1]]}], ['outer', 'inner', 'inner']),
+])
+def test_detect_route_uses_frontend_polygons_and_marks_membership(setup, mode, zones, expected_lanes):
+    service, detector, client, meta, content, elapsed, *_ = setup
+    detector.results = [{'class_name': 'car', 'confidence': .9, 'bbox': [.1, .1, .3, .8]},
+                        {'class_name': 'truck', 'confidence': .9, 'bbox': [.7, .1, .9, .8]},
+                        {'class_name': 'bus', 'confidence': .9, 'bbox': [.4, .1, .8, .8]}]
+    data = {**meta.model_dump(mode='json'), 'lane_mode': mode, 'active_zones': zones,
+            'calibration_confirmed': True}
+    response = client.post('/local-video/detect-frame', content=content,
+        headers={'Content-Type': 'image/jpeg', 'X-Frame-Metadata': json.dumps(data)})
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result['detections']) == 3
+    assert [d['lane_zone'] for d in result['detections']] == expected_lanes
+    assert [d['in_queue_zone'] for d in result['detections']] == [lane is not None for lane in expected_lanes]
+    assert result['queue_count'] == result['total_queue'] == (1 if mode == 'SINGLE_QUEUE' else 3)
+    assert result['lane_mode'] == mode
+    if mode == 'SINGLE_QUEUE':
+        # Third bbox overlaps polygon but bottom-center x=.6 remains outside.
+        assert result['detections'][2]['in_queue_zone'] is False
+        assert result['inner_lane_queue'] is None
+    else:
+        assert result['outer_lane_queue'] == 1 and result['inner_lane_queue'] == 2
+    row = client.get('/local-video/queue-summary?mode=YOLO_LOCAL_REALTIME').json()['approaches'][0]
+    assert row['total_queue'] == result['total_queue']
+    # Changing only the confirmed polygon changes counting on the next frame.
+    elapsed[0] += .6
+    data['frame_sequence'] += 1
+    data['active_zones'][0]['polygon'] = [[0, 0], [.05, 0], [.05, 1], [0, 1]]
+    second = client.post('/local-video/detect-frame', content=content,
+        headers={'Content-Type': 'image/jpeg', 'X-Frame-Metadata': json.dumps(data)}).json()
+    assert second['total_queue'] == (0 if mode == 'SINGLE_QUEUE' else 2)
+    assert second['detections'][0]['in_queue_zone'] is False
+    elapsed[0] += service.max_age + 1
+    stale = client.get('/local-video/queue-summary?mode=YOLO_LOCAL_REALTIME').json()['approaches'][0]
+    assert stale['total_queue'] is None and stale['queue_count'] is None
+    assert client.get('/health').json()['status'] == 'healthy'
+
+
+@pytest.mark.parametrize('changes', [
+    {'calibration_confirmed': False},
+    {'active_zones': [{'lane_type': 'inner', 'polygon': [[0, 0], [1, 0], [1, 1], [0, 1]]}]},
+    {'active_zones': [{'lane_type': 'queue', 'polygon': [[0, 0], [1, 1], [0, 1], [1, 0]]}]},
+])
+def test_invalid_frontend_zones_never_fall_back_to_default_counts(setup, changes):
+    service, detector, client, meta, content, *_ = setup
+    detector.results = [{'bbox': [.1, .1, .3, .8]}]
+    data = {**meta.model_dump(mode='json'), 'lane_mode': 'SINGLE_QUEUE', 'calibration_confirmed': True,
+            'active_zones': [{'lane_type': 'queue', 'polygon': [[0, 0], [1, 0], [1, 1], [0, 1]]}], **changes}
+    response = client.post('/local-video/detect-frame', content=content,
+        headers={'Content-Type': 'image/jpeg', 'X-Frame-Metadata': json.dumps(data)})
+    assert response.status_code == 200
+    result = response.json()
+    assert result['status'] == 'ZONE_CALIBRATION_REQUIRED'
+    assert result['queue_count'] is None and result['total_queue'] is None
+    assert result['detections'][0]['in_queue_zone'] is False
+    assert result['detections'][0]['lane_zone'] is None

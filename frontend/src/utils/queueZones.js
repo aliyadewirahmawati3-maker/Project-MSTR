@@ -1,5 +1,8 @@
+import { validateLaneZones } from './laneMode.js'
+
 const cameras = ['CAM-W-01', 'CAM-N-01', 'CAM-E-01', 'CAM-S-01']
 const rules = {
+  queue: ['QUEUE', 'antrean utama'],
   outer: ['LEFT_OR_STRAIGHT', 'belok kiri / lurus'],
   inner: ['STRAIGHT_OR_RIGHT', 'lurus / belok kanan'],
 }
@@ -49,7 +52,7 @@ export function validatePolygon(polygon) {
 }
 
 export function validateQueueZones(zones) {
-  require(Array.isArray(zones) && zones.length === 8, 'Konfigurasi harus tepat 8 zona')
+  require(Array.isArray(zones) && zones.length >= 4 && zones.length <= 8, 'Konfigurasi harus tepat 8 zona')
   const seen = new Set()
   for (const zone of zones) {
     require(zone && typeof zone === 'object' && Object.keys(zone).length === fields.length &&
@@ -65,7 +68,7 @@ export function validateQueueZones(zones) {
     validatePolygon(zone.polygon)
   }
   for (const cameraId of cameras) {
-    require(zones.filter(zone => zone.cameraId === cameraId).length === 2, `${cameraId} harus tepat 2 zona`)
+    validateLaneZones(zones.filter(zone => zone.cameraId === cameraId))
   }
   return true
 }

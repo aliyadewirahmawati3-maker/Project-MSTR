@@ -46,7 +46,13 @@ export function normalizeQueueSummary(payload) {
       throw new Error('Kode arah ringkasan antrean tidak valid.')
     }
     seen.add(approachCode)
+    const laneMode = item.lane_mode ?? 'DUAL_LANE'
+    if (!['SINGLE_QUEUE', 'DUAL_LANE'].includes(laneMode)) throw new Error('Mode antrean tidak valid.')
+    const queueCount = normalizeQueueValue(item.queue_count ?? item.total_queue, 'queue_count')
+    if (laneMode === 'SINGLE_QUEUE' && queueCount !== item.total_queue) throw new Error('Total antrean tidak konsisten.')
     return {
+      lane_mode: laneMode,
+      queue_count: queueCount,
       approach_code: approachCode,
       approach_name: normalizeText(item.approach_name, 'approach_name'),
       camera_id: item.camera_id === null ? null : normalizeText(item.camera_id, 'camera_id'),

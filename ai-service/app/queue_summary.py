@@ -21,6 +21,8 @@ class ApproachSummary(BaseModel):
     profile_id: str | None
     source_type: Literal["OFFLINE_CONFIG", "OFFLINE_ESTIMATION", "SIMULATOR", "YOLO_LOCAL_REALTIME"] = "OFFLINE_CONFIG"
     # Null means not measured, never an observed empty queue.
+    lane_mode: Literal["SINGLE_QUEUE", "DUAL_LANE"] = "DUAL_LANE"
+    queue_count: int | None = None
     outer_lane_queue: int | None = None
     inner_lane_queue: int | None = None
     total_queue: int | None = None
@@ -61,10 +63,16 @@ def queue_summary(response: Response, mode: Literal["YOLO_LOCAL_REALTIME"] | Non
     try:
         cameras = load_inputs(os.getenv("SIGAP_QUEUE_ZONES_PATH", "/config/cctv/queue_zones.json"))
         if mode == "YOLO_LOCAL_REALTIME":
+            latest = {}
+            for camera in cameras:
+                row = inference_service.latest(camera.camera_code)
+                if row["profile_id"] is None:
+                    row["lane_mode"] = camera.lane_mode
+                latest[camera.camera_code] = row
             return QueueSummary(configuration_valid=True, source_type=mode, inference_enabled=True,
                 source_validation="BROWSER_SNAPSHOT", approaches=[ApproachSummary(
                     approach_code=direction, approach_name=APPROACH_NAMES[direction],
-                    **inference_service.latest(code)) for code, direction in CAMERAS.items()])
+                    **latest[code]) for code, direction in CAMERAS.items()])
         mode = configured_mode()
         estimates = estimate_queues(cameras, os.getenv("SIGAP_OFFLINE_ROOT", "/data/cctv-offline"), mode)
         source_type = "OFFLINE_CONFIG" if mode == MODE_DISABLED else mode
@@ -75,6 +83,8 @@ def queue_summary(response: Response, mode: Literal["YOLO_LOCAL_REALTIME"] | Non
             camera_id=by_direction[direction].camera_code,
             profile_id=by_direction[direction].profile_id,
             source_type=estimates[by_direction[direction].camera_code].source_type,
+            lane_mode=by_direction[direction].lane_mode,
+            queue_count=estimates[by_direction[direction].camera_code].total,
             outer_lane_queue=estimates[by_direction[direction].camera_code].outer,
             inner_lane_queue=estimates[by_direction[direction].camera_code].inner,
             total_queue=estimates[by_direction[direction].camera_code].total,

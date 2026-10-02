@@ -1,6 +1,9 @@
 export const AI_SERVICE_URL = (import.meta.env?.VITE_AI_SERVICE_URL?.trim() || 'http://localhost:8001').replace(/\/+$/, '')
 const configuredInterval = Number(import.meta.env?.VITE_YOLO_INTERVAL_MS)
-export const FRAME_INTERVAL_MS = Number.isFinite(configuredInterval) && configuredInterval >= 1500 ? configuredInterval : 2000
+export const FRAME_INTERVAL_MS = Number.isFinite(configuredInterval) && configuredInterval >= 500 ? configuredInterval : 1000
+export const MIN_FRAME_INTERVAL_MS = Number.isFinite(configuredInterval) && configuredInterval >= 500 ? configuredInterval : 500
+const configuredFps = Number(import.meta.env?.VITE_YOLO_FPS)
+export const DEFAULT_INFERENCE_FPS = configuredFps === 1 || configuredFps === 2 ? configuredFps : FRAME_INTERVAL_MS === 500 ? 2 : 1
 
 async function request(path, options = {}) {
   // Browser-selected frames must never be sent to an internet hostname.

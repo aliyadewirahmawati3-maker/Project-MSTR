@@ -6,8 +6,8 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   --blue: #1873e8;
-  --muted: #7c899b;
-  --line: #e9edf3;
+  --muted: #596b82;
+  --line: #e2e8f0;
   --sidebar-width: 230px;
 }
 * { box-sizing: border-box; }
@@ -156,15 +156,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
 .map-compass circle, .map-compass path { stroke: #a1afc0; fill: none; stroke-width: 1; }
 .map-compass path { fill: #a1afc0; }
 .map-compass text { font: 10px 'Segoe UI', sans-serif; text-anchor: middle; fill: #7c8fa6; }
-.approach-key { position: absolute; font-size: 10px; color: #7d8b9e; z-index: 1; }
-.approach-key.west { top: 28%; left: 5%; }
-.approach-key.north { top: 20%; right: 5%; }
-.approach-key.south { bottom: 9%; left: 5%; }
-.approach-key.east { bottom: 9%; right: 5%; }
-.approach-key strong { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #5a6e89; font-weight: 600; margin-bottom: 9px; }
-.approach-key strong span { color: #6481a8; font-size: 9px; border: 1px solid #dbe3ef; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; height: 21px; width: 21px; background: #fff; }
-.approach-key p { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 9px; }
-.approach-key i { width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; opacity: .7; }
 .phase-strip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 20px 8px; font-size: 10px; }
 .phase-strip > span { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .phase-strip > span > svg { color: #5c81af; }
@@ -283,9 +274,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
   .metric-label { font-size: 11px; }
   .operation-metric strong { font-size: 17px; }
   .queue-metric p { font-size: 10px; }
-  .approach-key { font-size: 11px; }
-  .approach-key strong { font-size: 12px; }
-  .approach-key p { font-size: 10px; }
 }
 @media (max-width: 1500px) {
   .operation-metric { padding: 0 10px; gap: 8px; }
@@ -296,8 +284,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
   .operator-monitor { display: none; }
   .heading-with-icon .icon-tile { display: none; }
   .card-heading h2 { font-size: 13px; }
-  .approach-key.west, .approach-key.south { left: 3%; }
-  .approach-key.north, .approach-key.east { right: 3%; }
   .queue-metrics { gap: 13px; }
   .camera-empty p { font-size: 8px; letter-spacing: .3px; }
   .camera-empty svg { width: 24px; height: 24px; margin-bottom: 4px; }
@@ -313,8 +299,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
   .decision-column { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
   .map-canvas { flex: auto; height: 390px; }
   .card-heading h2 { font-size: 15px; }
-  .approach-key.west, .approach-key.south { left: 5%; }
-  .approach-key.north, .approach-key.east { right: 5%; }
   .cctv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .camera-empty p { font-size: 10px; }
   .camera-empty svg { width: 30px; height: 30px; }
@@ -365,13 +349,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
   .decision-column { grid-template-columns: 1fr; }
   .heading-with-icon .icon-tile { display: flex; }
   .map-canvas { height: 420px; margin: 10px 10px 0; }
-  .approach-key.west { top: 23%; }
-  .approach-key.north { top: 20%; }
-  .approach-key.west, .approach-key.south { left: 3%; }
-  .approach-key.north, .approach-key.east { right: 3%; }
-  .approach-key p { font-size: 8px; gap: 4px; }
-  .approach-key strong { font-size: 10px; }
-  .approach-key strong span { width: 18px; height: 18px; }
   .map-compass { width: 42px; height: 42px; left: 14px; }
   .phase-strip { font-size: 10px; padding-left: 15px; padding-right: 15px; }
   .map-footnote { padding-left: 15px; }
@@ -413,16 +390,6 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
   .map-canvas { height: auto; aspect-ratio: auto; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 8px; padding: 6px; }
   .intersection-svg { position: relative; grid-column: 1 / -1; width: 100%; height: auto; aspect-ratio: 1; }
   .map-compass { width: 34px; height: 34px; left: 5px; top: 5px; }
-  .approach-key.west { top: 19%; }
-  .approach-key.north { top: 15%; }
-  .approach-key.south, .approach-key.east { bottom: 7%; }
-  .approach-key.west, .approach-key.south { left: 2%; }
-  .approach-key.north, .approach-key.east { right: 2%; }
-  .approach-key { position: static; padding: 0 5px 8px; }
-  .approach-key strong { font-size: 11px; gap: 6px; margin-bottom: 8px; }
-  .approach-key strong span { width: 20px; height: 20px; font-size: 9px; }
-  .approach-key p { font-size: 9px; margin-top: 6px; gap: 4px; }
-  .approach-key i { width: 5px; height: 5px; }
   .phase-lights { padding-left: 22px; }
   .cctv-card .card-heading { align-items: flex-start; flex-direction: column; gap: 8px; }
   .cctv-grid { grid-template-columns: 1fr; gap: 22px; }
@@ -434,4 +401,101 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.15px; line-height: 1.4
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+}
+
+/* Dashboard presentation: keep data and controls in their existing components. */
+.topbar { background: #173b67; }
+.brand-area { background: #14345b; }
+.search-box { background: #ffffff12; border: 1px solid #ffffff24; }
+.hero { background: #edf3fa; color: #173b67; padding-bottom: 28px; min-height: 142px; }
+.hero-eyebrow, .hero-content > p, .operator-monitor { color: #526c8b; }
+.hero h1 { font-size: clamp(23px, 2vw, 30px); font-weight: 700; }
+.hero-badge { color: #245b96; background: #fff; border-color: #c9d8ea; letter-spacing: .2px; font-size: 11px; }
+.hero-badge .status-dot { background: #527cab; }
+.refresh-button { border: 1px solid #c9d8ea; box-shadow: none; }
+.dashboard-body { margin-top: 0; padding-top: 22px; }
+.card { border-color: #dfe7f0; border-radius: 12px; box-shadow: 0 3px 14px #213b5b06; }
+.mode-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; background: #fff; border: 1px solid #dfe7f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 22px; }
+.mode-overview > div { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
+.mode-overview > div + div { border-left: 1px solid var(--line); padding-left: 24px; }
+.mode-overview .mode-label { font-size: 11px; font-weight: 600; color: #526780; }
+.mode-overview strong { font-size: 17px; color: #173b67; overflow-wrap: anywhere; }
+.mode-overview strong.badge { font-size: 12px; color: inherit; }
+.mode-overview > div > span:last-child { font-size: 12px; color: #596b82; }
+.summary-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.summary-heading { flex-wrap: wrap; margin-bottom: 18px; }
+.summary-heading h2, .card-heading h2 { font-size: 16px; font-weight: 650; color: #213b5b; }
+.summary-meta, .card-heading p, .metric-note { color: #596b82; font-size: 12px; line-height: 1.6; }
+.operation-metric { align-items: flex-start; padding: 0 18px; }
+.operation-metric > div { min-width: 0; }
+.operation-metric .icon-tile { width: 36px; height: 36px; }
+.metric-label { white-space: normal; font-size: 11px; color: #526780; line-height: 1.5; }
+.operation-metric strong { white-space: normal; overflow-wrap: anywhere; font-size: 16px; }
+.queue-summary-note { font-size: 12px; color: #596b82; margin-bottom: 16px; }
+.queue-metrics { gap: 14px; }
+.queue-metric { background: #f7f9fc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px; min-width: 0; }
+.queue-metric > div:first-child { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+.queue-metric > div > span { font-size: 12px; color: #405a78; }
+.queue-metric strong { font-size: 26px; color: #173b67; font-variant-numeric: tabular-nums; }
+.queue-metric strong small { display: block; font-size: 10px; font-weight: 400; color: #596b82; }
+.queue-metric p { font-size: 12px; color: #596b82; line-height: 1.6; }
+.queue-indicator { margin: 12px 0; }
+.main-grid { grid-template-columns: minmax(0, 1.35fr) minmax(350px, 1fr); gap: 20px; }
+.card-heading { padding: 18px 20px; gap: 12px; flex-wrap: wrap; }
+.badge { white-space: normal; font-size: 11px; border-radius: 6px; }
+.badge-neutral { color: #526780; }
+.recommendation-metrics { grid-template-columns: 1fr 1fr; gap: 16px; }
+.recommendation-metrics > div:first-child { grid-column: 1 / -1; background: #edf4fd; border-radius: 8px; padding: 14px; }
+.recommendation-metrics > div { padding-left: 0; border-left: 0; }
+.recommendation-metrics dt { color: #526780; font-size: 12px; }
+.recommendation-metrics dd { color: #213b5b; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.recommendation-metrics .recommendation-phase { font-size: 20px; font-weight: 650; }
+.recommendation-reason { border-radius: 8px; }
+.recommendation-reason p, .heuristic-note, .operator-note { font-size: 12px; color: #526780; line-height: 1.7; }
+.integration-flow li > span, .integration-active, .integration-active strong, .service-readout > span { font-size: 11px; }
+.integration-active { flex-wrap: wrap; }
+.service-readout { gap: 12px; }
+.map-canvas { border-radius: 8px; min-height: 390px; }
+.map-card .map-mode-select, .map-card .map-mode-message, .map-card .density-select { font-size: 12px; color: #526780; }
+.map-card .sim-toolbar { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.map-card select, .map-card .sim-controls button { font-size: 12px; min-height: 36px; }
+.compact-details { font-size: 12px; }
+.phase-strip { font-size: 12px; padding-bottom: 14px; }
+.phase-lights { font-size: 11px; }
+.cctv-grid { grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 14px; padding: 16px; align-items: start; overflow-x: auto; }
+.camera-card { padding: 12px; border: 1px solid #e2e8f0; background: #f9fbfd; border-radius: 9px; }
+.camera-heading h3 { font-size: 12px; }
+.camera-frame { border-radius: 7px; }
+.camera-empty p { font-size: 10px; letter-spacing: .2px; }
+.camera-empty > span { font-size: 10px; color: #a7b2c0; }
+.camera-card .local-video-controls button, .camera-card .queue-zone-controls button { min-height: 32px; font-size: 11px; }
+.camera-card .source-details summary { font-size: 11px; }
+.camera-card .queue-zone-note, .camera-card .camera-state-hint { font-size: 11px; color: #526780; }
+.page-footer { color: #596b82; font-size: 11px; }
+@media (min-width: 1600px) {
+  .summary-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+  .operation-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .operation-metric { padding: 0; border: 0; }
+}
+@media (max-width: 1250px) {
+  .main-grid { grid-template-columns: minmax(0, 1fr); }
+  .cctv-grid { grid-template-columns: repeat(4, minmax(220px, 1fr)); }
+}
+@media (max-width: 760px) {
+  .mode-overview { grid-template-columns: 1fr; gap: 14px; padding: 18px; }
+  .mode-overview > div + div { border-left: 0; border-top: 1px solid var(--line); padding: 14px 0 0; }
+  .hero { padding-bottom: 24px; }
+  .operation-metric { padding: 0 10px; }
+  .operation-metric strong { font-size: 14px; }
+  .queue-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .decision-column { grid-template-columns: 1fr; }
+  .map-canvas { min-height: 0; }
+}
+@media (max-width: 480px) {
+  .cctv-grid { grid-template-columns: repeat(4, minmax(220px, 1fr)); }
+  .operation-metrics { grid-template-columns: 1fr; gap: 16px; }
+  .operation-metric { padding: 0; border: 0; }
+  .queue-metric { padding: 10px; }
+  .hero-actions { flex-wrap: wrap; }
+  .hero-badge, .card-heading .badge { font-size: 10px; }
 }

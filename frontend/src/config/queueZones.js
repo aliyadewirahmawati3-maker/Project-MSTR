@@ -9,9 +9,9 @@ export const queueZones = source.cameras.flatMap(camera => camera.zones.map(zone
   id: zone.zone_id,
   cameraId: camera.camera_code,
   laneType: zone.lane_type,
-  label: `Zona ${camera.direction_label} — lajur ${zone.lane_type === 'outer' ? 'luar' : 'dalam'}`,
+  label: zone.lane_type === 'queue' ? `Antrean ${camera.direction_label}` : `Zona ${camera.direction_label} — lajur ${zone.lane_type === 'outer' ? 'luar' : 'dalam'}`,
   movementRule: zone.movement_rules,
-  movementLabel: zone.lane_type === 'outer' ? 'belok kiri / lurus' : 'lurus / belok kanan',
+  movementLabel: zone.lane_type === 'queue' ? 'antrean utama' : zone.lane_type === 'outer' ? 'belok kiri / lurus' : 'lurus / belok kanan',
   polygon: zone.polygon.map(point => [...point]),
 })))
 
@@ -33,6 +33,7 @@ function freeze(value) {
 }
 
 export const zoneProfiles = freeze(source.cameras.map(camera => ({
+  lane_mode: camera.lane_mode || 'DUAL_LANE',
   profile_id: camera.profile_id,
   camera_code: camera.camera_code,
   direction: camera.direction,

@@ -4,20 +4,21 @@ import AppIcon from './AppIcon.vue'
 import SimulationVehicle from './SimulationVehicle.vue'
 import { yoloMapQueues } from '../utils/yoloMapQueues.js'
 import { formatQueueValue } from '../services/aiQueueSummary.js'
-import { directionLabel, movementLabel } from '../services/sigapApi.js'
+import { mapPhasePresentation, PHASE_DIRECTIONS, PHASE_LIGHT_LABELS } from '../utils/mapPhasePresentation.js'
 import { MAP_DISPLAY_MODES, useMapDisplayMode } from '../composables/useMapDisplayMode.js'
 
-const props = defineProps({ apiApproaches: { type: Array, default: () => [] }, signalPhases: { type: Array, default: () => [] }, queueApproaches: { type: Array, default: () => [] } })
-const detectedLanes = computed(() => yoloMapQueues(props.queueApproaches))
+const props = defineProps({ intersectionName: { type: String, default: 'Persimpangan' }, apiApproaches: { type: Array, default: () => [] }, signalPhases: { type: Array, default: () => [] }, queueApproaches: { type: Array, default: () => [] } })
+const freshnessNow = ref(Date.now())
+const detectedLanes = computed(() => yoloMapQueues(props.queueApproaches, freshnessNow.value))
 const laneCounts = computed(() => [...new Set(props.apiApproaches.map(approach => approach.lanes?.length || 0))].join('/'))
 import { colors, flows, motionPaths } from '../simulation/mapGeometry.js'
-import { advanceSimulation, cancelEvp, createSimulation, DENSITIES, DIRECTIONS, LABELS, lightFor, queuedVehicles, requestEvp, setDensity, TIMING } from '../simulation/intersectionSimulator.js'
+import { advanceSimulation, cancelEvp, createSimulation, DENSITIES, DIRECTIONS, LABELS, queuedVehicles, requestEvp, setDensity } from '../simulation/intersectionSimulator.js'
 
 const approaches = [
   { label: 'Barat', code: 'B', color: 'green', left: 'Utara', straight: 'Timur', right: 'Selatan', className: 'west' },
   { label: 'Utara', code: 'U', color: 'cream', left: 'Timur', straight: 'Selatan', right: 'Barat', className: 'north' },
-  { label: 'Selatan', code: 'S', color: 'gray', left: 'Barat', straight: 'Utara', right: 'Timur', className: 'south' },
   { label: 'Timur', code: 'T', color: 'orange', left: 'Selatan', straight: 'Barat', right: 'Utara', className: 'east' },
+  { label: 'Selatan', code: 'S', color: 'gray', left: 'Barat', straight: 'Utara', right: 'Timur', className: 'south' },
 ]
 const simulation = reactive(createSimulation())
 const { mode: displayMode, isSimulation, presentation: modePresentation, selectMode } = inject('localInference', null)?.map || useMapDisplayMode()
@@ -25,8 +26,11 @@ const emergencyKind = ref('ambulance')
 const emergencyDirection = ref('west')
 const pathsReady = ref(false)
 let frameId
+let freshnessTimer
 let previousTime = null
-const phaseNames = { green: 'Hijau', yellow: 'Kuning', allRed: 'All-Red', red: 'Merah' }
+const phaseNames = PHASE_LIGHT_LABELS
+const mapPhase = computed(() => mapPhasePresentation({ isSimulation: isSimulation.value, simulation,
+  queues: props.queueApproaches, now: freshnessNow.value }))
 const emergencyNames = { ambulance: 'Ambulans', firetruck: 'Pemadam' }
 // Placed outside the road edges, clear of its markings and existing keys.
 const signals = [
@@ -35,7 +39,6 @@ const signals = [
   { direction: 'north', x: 501, y: 280 },
   { direction: 'south', x: 271, y: 492 },
 ]
-const countdown = computed(() => Math.ceil(Math.max(0, simulation.remaining - 0.000001)))
 const evpStatus = computed(() => simulation.evp
   ? `EVP Simulasi Aktif · ${emergencyNames[simulation.evp.kind]} dari ${LABELS[simulation.evp.direction]}`
   : 'EVP: Aman')
@@ -85,11 +88,13 @@ function animate(time) {
   frameId = requestAnimationFrame(animate)
 }
 onMounted(() => {
+  freshnessTimer = setInterval(() => { freshnessNow.value = Date.now() }, 100)
   pathsReady.value = true
   frameId = requestAnimationFrame(animate)
   document.addEventListener('visibilitychange', clearFrameClock)
 })
 onBeforeUnmount(() => {
+  clearInterval(freshnessTimer)
   cancelAnimationFrame(frameId)
   document.removeEventListener('visibilitychange', clearFrameClock)
 })
@@ -97,39 +102,23 @@ onBeforeUnmount(() => {
 
 <template>
   <section id="peta-simpang" class="card map-card" tabindex="-1" aria-labelledby="map-title">
-    <div class="card-heading">
-      <div><h2 id="map-title">Peta Persimpangan &amp; Fase Aktif</h2></div>
-      <span class="badge badge-neutral"><AppIcon name="map" :size="13" />{{ apiApproaches.length || '—' }} arah · {{ laneCounts || '—' }} lajur</span>
-    </div>
-    <div class="sim-toolbar">
-      <label class="map-mode-select">Mode peta
-        <select :value="displayMode" @change="changeDisplayMode($event.target.value)">
-          <option v-for="option in MAP_DISPLAY_MODES" :key="option.value" :value="option.value">{{ option.label }}</option>
-        </select>
-      </label>
-      <span class="badge simulation-badge">{{ modePresentation.label }}</span>
-      <div v-if="isSimulation" class="sim-controls" role="group" aria-label="Kontrol simulator visual">
-        <button type="button" class="sim-play" :aria-pressed="simulation.playing" @click="togglePlay">
-          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path v-if="simulation.playing" d="M4 3h3v10H4Zm5 0h3v10H9Z" fill="currentColor" /><path v-else d="m5 3 8 5-8 5Z" fill="currentColor" /></svg>
-          {{ simulation.playing ? 'Pause' : 'Play' }}
-        </button>
-        <button type="button" @click="reset"><AppIcon name="refresh" :size="13" />Reset</button>
-        <div class="speed-control" role="group" aria-label="Kecepatan simulator">
-          <button v-for="speed in [1, 2]" :key="speed" type="button" :aria-pressed="simulation.speed === speed" @click="setSpeed(speed)">{{ speed }}×</button>
-        </div>
-      </div>
-      <div class="map-mode-message" role="status">
-        <strong v-if="modePresentation.status">{{ modePresentation.status }}</strong>
-        <span>{{ modePresentation.help }}</span>
-      </div>
-      <div v-if="isSimulation" class="density-controls">
-        <label class="density-select">Mode kepadatan
-          <select :value="simulation.density" @change="setDensity(simulation, $event.target.value)">
-            <option v-for="(density, key) in DENSITIES" :key="key" :value="key">{{ density.label }} (Simulasi)</option>
+    <div class="card-heading map-header">
+      <div><h2 id="map-title">Peta Persimpangan</h2><p>Arus kendaraan, antrean per lajur, dan fase simulasi</p></div>
+      <div class="map-header-controls">
+        <label class="map-mode-select">Mode peta
+          <select :value="displayMode" @change="changeDisplayMode($event.target.value)">
+            <option v-for="option in MAP_DISPLAY_MODES" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
-        <span class="badge density-badge">Kepadatan Visual: {{ DENSITIES[simulation.density].label }} · Simulasi</span>
+        <span class="badge simulation-badge" role="status">{{ modePresentation.label }}</span>
       </div>
+    </div>
+    <div class="map-context">
+      <div class="map-compass" aria-label="Kompas: Utara atas, Barat kiri, Timur kanan, Selatan bawah">
+        <svg viewBox="0 0 66 66" aria-hidden="true"><circle cx="33" cy="33" r="20" /><path d="M33 15v36M15 33h36M33 18l-3 6h6Z" /><text x="33" y="10">U</text><text x="6" y="37">B</text><text x="60" y="37">T</text><text x="33" y="64">S</text></svg>
+      </div>
+      <strong>{{ intersectionName }}</strong>
+      <span class="badge badge-neutral"><AppIcon name="map" :size="13" />{{ apiApproaches.length || '—' }} arah · {{ laneCounts || '—' }} lajur</span>
     </div>
     <div class="map-canvas">
       <svg class="intersection-svg" viewBox="0 0 772 772" role="img" aria-labelledby="intersection-title intersection-desc">
@@ -155,7 +144,7 @@ onBeforeUnmount(() => {
         </g>
         <path d="M386 35V300M386 472V736M35 386H300M472 386H736" fill="none" stroke="#c9ac60" stroke-width="2.6" />
 
-        <g class="flow-lines" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+        <g class="flow-lines" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path v-for="(flow, index) in flows" :key="index" :d="flow.d" :stroke="colors[flow.color]" :marker-end="`url(#flow-${flow.color})`" />
         </g>
 
@@ -188,51 +177,68 @@ onBeforeUnmount(() => {
           </g>
         </g>
 
-        <g v-if="isSimulation" class="simulation-signals">
-          <g v-for="signal in signals" :key="signal.direction" :transform="`translate(${signal.x} ${signal.y})`" :aria-label="`Lampu ${LABELS[signal.direction]}: ${phaseNames[lightFor(simulation, signal.direction)]}`">
-            <title>{{ LABELS[signal.direction] }}: {{ phaseNames[lightFor(simulation, signal.direction)] }}</title>
+        <g class="map-signals">
+          <g v-for="signal in signals" :key="signal.direction" :transform="`translate(${signal.x} ${signal.y})`" :aria-label="`${mapPhase.source} ${LABELS[signal.direction]}: ${phaseNames[mapPhase.lights[signal.direction]]}`">
+            <title>{{ mapPhase.source }} · {{ LABELS[signal.direction] }}: {{ phaseNames[mapPhase.lights[signal.direction]] }}</title>
             <rect x="-27" y="-11" width="54" height="22" rx="6" fill="#273951" stroke="#5c708c" stroke-width="1.4" />
-            <circle v-for="(aspect, index) in ['red', 'yellow', 'green']" :key="aspect" :cx="(index - 1) * 17" cy="0" r="6.3" :class="['signal-aspect', aspect, { lit: lightFor(simulation, signal.direction) === aspect }]" />
+            <circle v-for="(aspect, index) in ['red', 'yellow', 'green']" :key="aspect" :cx="(index - 1) * 17" cy="0" r="6.3" :class="['signal-aspect', aspect, { lit: mapPhase.lights[signal.direction] === aspect }]" />
           </g>
         </g>
 
         <g class="map-direction-labels" text-anchor="middle">
-          <g transform="translate(386 16)"><rect x="-14" y="-13" width="28" height="26" rx="5" /><text y="5">U</text></g>
-          <g transform="translate(16 386)"><rect x="-13" y="-13" width="26" height="26" rx="5" /><text y="5">B</text></g>
-          <g transform="translate(756 386)"><rect x="-13" y="-13" width="26" height="26" rx="5" /><text y="5">T</text></g>
-          <g transform="translate(386 756)"><rect x="-14" y="-13" width="28" height="26" rx="5" /><text y="5">S</text></g>
+          <g transform="translate(386 16)" :class="mapPhase.lights.north"><rect x="-14" y="-13" width="28" height="26" rx="5" /><text y="5">U</text></g>
+          <g transform="translate(16 386)" :class="mapPhase.lights.west"><rect x="-13" y="-13" width="26" height="26" rx="5" /><text y="5">B</text></g>
+          <g transform="translate(756 386)" :class="mapPhase.lights.east"><rect x="-13" y="-13" width="26" height="26" rx="5" /><text y="5">T</text></g>
+          <g transform="translate(386 756)" :class="mapPhase.lights.south"><rect x="-14" y="-13" width="28" height="26" rx="5" /><text y="5">S</text></g>
         </g>
       </svg>
 
-      <div class="map-compass" aria-label="Kompas: Utara atas, Barat kiri, Timur kanan, Selatan bawah">
-        <svg viewBox="0 0 66 66" aria-hidden="true"><circle cx="33" cy="33" r="20" /><path d="M33 15v36M15 33h36M33 18l-3 6h6Z" /><text x="33" y="10">U</text><text x="6" y="37">B</text><text x="60" y="37">T</text><text x="33" y="64">S</text></svg>
+    </div>
+    <div class="approach-legend" aria-label="Legend arus per arah">
+      <article v-for="approach in approaches" :key="approach.code" class="approach-legend-card">
+        <h3><span>{{ approach.code }}</span>Arah {{ approach.label }}</h3>
+        <p><i :style="{ background: colors.blue }"></i><span>Kiri → {{ approach.left }} / lurus</span></p>
+        <p><i :style="{ background: colors.red }"></i><span>Lurus → {{ approach.straight }}</span></p>
+        <p><i :style="{ background: colors[approach.color] }"></i><span>Kanan → {{ approach.right }}</span></p>
+      </article>
+    </div>
+    <section class="active-phase-panel" aria-label="Fase aktif peta" role="status">
+      <div class="active-phase-heading">
+        <AppIcon name="traffic" :size="18" /><strong>Fase Aktif: {{ mapPhase.label }}</strong>
+        <span :class="['phase-state', mapPhase.light]">{{ phaseNames[mapPhase.light] }}</span>
+        <b v-if="mapPhase.seconds !== null" class="phase-countdown">{{ mapPhase.seconds }} dtk</b>
+        <span class="phase-run-status">· {{ mapPhase.status }}</span>
+        <span class="badge badge-neutral">{{ mapPhase.source }}</span>
       </div>
-      <div v-for="approach in approaches" :key="approach.code" :class="['approach-key', approach.className]">
-        <strong><span>{{ approach.code }}</span>Arah {{ approach.label }}</strong>
-        <p><i :style="{ background: colors.blue }"></i>Kiri ke {{ approach.left }} / lurus</p>
-        <p><i :style="{ background: colors.red }"></i>Lurus ke {{ approach.straight }}</p>
-        <p><i :style="{ background: colors[approach.color] }"></i>Kanan ke {{ approach.right }}</p>
+      <div class="phase-lights" aria-label="Status warna setiap arah">
+        <span v-for="direction in PHASE_DIRECTIONS" :key="direction"><i :class="['status-dot', mapPhase.lights[direction]]"></i>{{ LABELS[direction] }} {{ phaseNames[mapPhase.lights[direction]] }}</span>
+      </div>
+      <p v-if="mapPhase.note" class="phase-note">{{ mapPhase.note }}</p>
+    </section>
+    <div class="sim-toolbar">
+      <div v-if="isSimulation" class="sim-controls" role="group" aria-label="Kontrol simulator visual">
+        <button type="button" class="sim-play" :aria-pressed="simulation.playing" @click="togglePlay">
+          <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path v-if="simulation.playing" d="M4 3h3v10H4Zm5 0h3v10H9Z" fill="currentColor" /><path v-else d="m5 3 8 5-8 5Z" fill="currentColor" /></svg>
+          {{ simulation.playing ? 'Pause' : 'Play' }}
+        </button>
+        <button type="button" @click="reset"><AppIcon name="refresh" :size="13" />Reset</button>
+        <div class="speed-control" role="group" aria-label="Kecepatan simulator">
+          <button v-for="speed in [1, 2]" :key="speed" type="button" :aria-pressed="simulation.speed === speed" @click="setSpeed(speed)">{{ speed }}×</button>
+        </div>
+      </div>
+      <div class="map-mode-message" role="status">
+        <strong v-if="modePresentation.status">{{ modePresentation.status }}</strong>
+        <span>{{ modePresentation.help }}</span>
+      </div>
+      <div v-if="isSimulation" class="density-controls">
+        <label class="density-select">Mode kepadatan
+          <select :value="simulation.density" @change="setDensity(simulation, $event.target.value)">
+            <option v-for="(density, key) in DENSITIES" :key="key" :value="key">{{ density.label }} (Simulasi)</option>
+          </select>
+        </label>
+        <span class="badge density-badge">Kepadatan Visual: {{ DENSITIES[simulation.density].label }} · Simulasi</span>
       </div>
     </div>
-    <div v-if="!isSimulation" class="yolo-queue-strip" role="status">
-      <p>Jumlah kendaraan dalam zona YOLO. Ikon menunjukkan jumlah per lajur; posisi pada peta bersifat skematis. Maksimal 7 ikon per lajur, angka tetap menampilkan total.</p>
-      <div v-for="queue in queueApproaches" :key="queue.approach_code"><strong>{{ queue.approach_name }}</strong><span>Luar {{ formatQueueValue(queue.outer_lane_queue) }} · Dalam {{ formatQueueValue(queue.inner_lane_queue) }}</span></div>
-    </div>
-    <div v-if="isSimulation" class="phase-strip">
-      <span><AppIcon name="traffic" :size="17" /><strong>{{ isSimulation ? 'Fase Aktif' : 'Fase simulasi' }}: {{ LABELS[simulation.direction] }}</strong><span :class="['phase-state', simulation.phase]">{{ phaseNames[simulation.phase] }}</span><b class="phase-countdown">{{ countdown }} dtk</b><span class="phase-simulator">· {{ !isSimulation ? 'Simulasi dijeda' : simulation.playing ? 'Berjalan' : 'Pause' }}</span></span>
-      <div class="phase-lights" aria-label="Status lampu setiap arah"><span v-for="direction in DIRECTIONS" :key="direction"><i :class="['status-dot', lightFor(simulation, direction)]"></i>{{ LABELS[direction] }} {{ phaseNames[lightFor(simulation, direction)] }}</span></div>
-      <span v-if="isSimulation && simulation.phase === 'allRed' && countdown === 0" class="phase-simulator">Menunggu simpang kosong</span>
-    </div>
-    <details class="compact-details phase-configuration">
-      <summary>Detail fase &amp; konfigurasi</summary>
-      <div class="compact-details-body">
-        <p>Warna jalur menunjukkan arah arus, bukan status lampu. Geometri dan animasi tetap simulasi lokal.</p>
-        <p>Dua lajur mengalir beriringan · Jarak aman antarkendaraan · Hijau {{ TIMING.green }} dtk / kuning {{ TIMING.yellow }} dtk / all-red ≥ {{ TIMING.allRed }} dtk.</p>
-        <p v-for="approach in apiApproaches" :key="approach.id">{{ directionLabel(approach.direction) }} · {{ approach.name }}: <span v-for="(lane, index) in approach.lanes" :key="lane.id">{{ index ? ' · ' : '' }}{{ lane.lane_type === 'outer' ? 'Lajur luar' : lane.lane_type === 'inner' ? 'Lajur dalam' : lane.lane_type }}: {{ movementLabel(lane.movement_rules) }}</span></p>
-        <p v-for="phase in signalPhases" :key="phase.id">Konfigurasi API · {{ phase.name }}: {{ phase.duration?.default_seconds ?? '—' }} dtk (min {{ phase.duration?.min_seconds ?? '—' }}, maks {{ phase.duration?.max_seconds ?? '—' }}, kuning {{ phase.duration?.amber_seconds ?? '—' }}, all-red {{ phase.duration?.all_red_seconds ?? '—' }} dtk).</p>
-        <p>Parameter API belum mengendalikan animasi atau ATCS fisik.</p>
-      </div>
-    </details>
     <section v-if="isSimulation" class="evp-panel" aria-labelledby="evp-title">
       <div class="evp-heading"><h3 id="evp-title"><AppIcon name="shield" :size="15" />Emergency Vehicle Priority</h3><span class="evp-local">Simulasi lokal</span></div>
       <p class="evp-status" :class="{ 'evp-active': simulation.evp }" role="status">{{ evpStatus }}</p>
@@ -249,17 +255,56 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.map-header-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+.map-header .map-mode-select { flex-wrap: wrap; font-weight: 500; }
+.map-header .map-mode-select select { max-width: 100%; min-width: 0; }
+.map-card .map-context { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .map-header-controls { width: 100%; }
+  .map-header .map-mode-select { flex: 1 1 180px; }
+  .map-header .map-mode-select select { flex: 1; }
+}
+.map-card .map-context { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 16px 20px 10px; min-width: 0; }
+.map-context strong { font-size: 13px; color: #405a78; overflow-wrap: anywhere; }
+.map-card .map-compass { position: static; width: 38px; height: 38px; flex-shrink: 0; }
+.map-card .map-canvas { display: block; flex: none; height: auto; min-height: 0; aspect-ratio: 1; width: calc(100% - 40px); max-width: 680px; margin: 0 auto; padding: 16px; overflow: hidden; border-radius: 10px; }
+.map-card .intersection-svg { position: static; display: block; width: 100%; height: 100%; max-height: none; aspect-ratio: 1; overflow: hidden; }
+.map-card .flow-lines > path { opacity: .58; stroke-width: 1.6px; }
+.approach-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 17px; }
+.approach-legend-card { padding: 12px 10px; background: #f7f9fc; border: 1px solid #e2e8f0; border-radius: 8px; min-width: 0; }
+.approach-legend-card h3 { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #213b5b; margin-bottom: 10px; }
+.approach-legend-card h3 > span { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; background: #fff; border: 1px solid #d6e1ef; border-radius: 5px; color: #405a78; font-size: 11px; }
+.approach-legend-card p { display: flex; align-items: baseline; gap: 6px; font-size: 11px; line-height: 1.6; color: #526780; }
+.approach-legend-card p + p { margin-top: 5px; }
+.approach-legend-card i { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+@media (max-width: 760px) {
+  .approach-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-inline: 10px; }
+  .map-card .map-canvas { width: calc(100% - 20px); padding: 10px; }
+}
+@media (max-width: 380px) {
+  .approach-legend { grid-template-columns: 1fr; }
+}
 .yolo-lane-count { fill: #213b5b; stroke: #fff; stroke-width: 4px; paint-order: stroke; font-size: 16px; font-weight: 700; }
-.yolo-queue-strip { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 0 17px 12px; font-size: 11px; color: #536984; }
-.yolo-queue-strip p { flex-basis: 100%; line-height: 1.6; margin: 0; }
-.yolo-queue-strip > div { display: flex; flex-direction: column; gap: 3px; }
+.active-phase-panel { margin: 0 17px 12px; padding: 14px; background: #f7f9fc; border: 1px solid #dfe7f0; border-radius: 8px; }
+.active-phase-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; color: #213b5b; }
+.active-phase-heading > svg { color: #526780; }
+.active-phase-heading .badge { margin-left: auto; }
+.active-phase-panel .phase-lights { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 12px; font-size: 12px; color: #405a78; }
+.phase-run-status { color: #526780; }
+.phase-note { margin-top: 10px; color: #596b82; font-size: 11px; line-height: 1.6; }
+.phase-state.red { color: #a33f4b; background: #fbeef0; }
+.phase-state.waiting { color: #526780; background: #e9eef5; }
+.map-card .map-direction-labels .green rect { fill: #e3f5ed; stroke: #238261; }
+.map-card .map-direction-labels .green text { fill: #238261; }
+.map-card .map-direction-labels .red rect { fill: #fbeef0; stroke: #b45762; }
+.map-card .map-direction-labels .red text { fill: #a33f4b; }
+.map-card .map-direction-labels .yellow rect { fill: #fff5df; stroke: #dca73d; }
+.map-card .map-direction-labels .yellow text { fill: #916612; }
 .sim-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 17px 0; }
 .map-mode-select { display: inline-flex; align-items: center; gap: 7px; color: #73849a; font-size: 10px; }
 .map-mode-select select { cursor: pointer; }
 .map-mode-message { display: flex; flex-basis: 100%; flex-direction: column; gap: 4px; color: #73849a; font-size: 10px; line-height: 1.5; }
 .map-mode-message strong { color: #536984; font-weight: 600; }
-.phase-configuration { margin: 0 17px 12px; }
-.phase-configuration .compact-details-body p + p { margin-top: 6px; }
 .simulation-badge { color: #506f96; background: #edf3fa; border: 1px solid #dbe6f3; font-size: 9px; white-space: normal; line-height: 1.5; }
 .sim-controls, .speed-control { display: flex; align-items: center; gap: 5px; }
 .sim-controls button, .map-mode-select select, .density-select select, .evp-controls button, .evp-controls select { min-height: 31px; border: 1px solid #d6e0ec; border-radius: 5px; background: #fff; color: #536984; padding: 6px 9px; font: inherit; font-size: 10px; }
@@ -297,6 +342,8 @@ onBeforeUnmount(() => {
 .evp-detail, .evp-future { font-size: 9px; line-height: 1.65; color: #7b8a9e; margin: 9px 0 0; }
 .evp-future { color: #8996a8; margin-top: 5px; }
 @media (max-width: 480px) {
+  .active-phase-panel { margin-inline: 10px; padding: 12px; }
+  .active-phase-heading .badge { margin-left: 0; }
   .sim-toolbar { padding: 10px 10px 0; }
   .evp-panel { margin: 0 10px 10px; padding: 10px; }
   .evp-controls button { flex: 1 1 145px; }

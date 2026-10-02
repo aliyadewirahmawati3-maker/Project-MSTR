@@ -34,22 +34,30 @@ Endpoint AI dipublish hanya pada `127.0.0.1:8001`. Komunikasi antarkontainer tet
 
 ## Konfigurasi
 
+Env demo root (`.env` / `.env.example`) dan contoh env AI menyetel `SIGAP_YOLO_CONFIDENCE=0.45` melalui setting detector yang sudah ada. Default detector juga 0,45. Compose tidak diubah, sehingga env demo harus tetap disetel untuk menimpa fallback Compose lama. Container yang sudah berjalan memakai konfigurasi lamanya sampai dibuat ulang dengan `docker compose up -d ai-service`.
+
+Overlay frontend default **Ringkas** (box + kelas) dengan confidence minimum **0,45**. **Detail** menambahkan confidence. Pengaturan pada tiap kamera hanya memfilter tampilan: hasil inference, jumlah antrean, dan rekomendasi tidak dihitung ulang di frontend. Overlay ditahan maksimal 1,5 detik sejak capture atau sampai video tertinggal 1,5 detik; setelah itu box disembunyikan walaupun umur data antrean belum habis. Label box kecil atau label yang tidak mendapat ruang bebas disembunyikan; box valid tetap tampil. Preview memakai dua kolom dan tombol **Perbesar preview**. Mengubah threshold env mempengaruhi hasil model yang diterima, sementara aturan hitung antrean tetap sama.
+
 Parameter publik dapat ditentukan di environment proses PowerShell sebelum `docker compose up -d ai-service` (tanpa mengubah `.env`):
 
 | Parameter container | Default | Keterangan |
 | --- | --- | --- |
 | `SIGAP_YOLO_WEIGHTS` | `/models/yolov13/yolov13n.pt` | File resmi, diperiksa SHA256; bukan input path dari request |
 | `SIGAP_YOLO_DEVICE` | `cpu` | Diteruskan ke detector; image ini memakai wheels CPU. GPU memerlukan image/runtime PyTorch GPU yang sesuai dan belum diuji |
-| `SIGAP_YOLO_CONFIDENCE` | `0.25` | Threshold 0,01–0,99 |
+| `SIGAP_YOLO_CONFIDENCE` | `0.45` | Threshold 0,01–0,99 |
 | `SIGAP_YOLO_IMAGE_SIZE` | `640` | 320–960, dibulatkan ke kelipatan 32 |
-| `SIGAP_YOLO_MIN_INTERVAL_SECONDS` | `1.5` | Batas request per kamera |
-| `SIGAP_YOLO_MAX_AGE_SECONDS` | `10` | Umur maksimum dihitung dari waktu capture, termasuk waktu proses |
-| `SIGAP_YOLO_SLOT_TIMEOUT_SECONDS` | `3` | Batas menunggu slot model, 0,1–5 detik; maksimal satu frame per kamera |
-| `VITE_YOLO_INTERVAL_MS` (host Vite) | `2000` | Target interval awal request, minimum 1500 ms; waktu proses termasuk dalam interval, ditambah jitter kecil antarkamera |
+| `SIGAP_YOLO_MIN_INTERVAL_SECONDS` | `0.5` | Kapasitas maksimum 2 FPS per kamera; UI default menargetkan 1 FPS |
+| `SIGAP_YOLO_MAX_AGE_SECONDS` | `2` | Umur maksimum dihitung dari waktu capture, termasuk waktu proses |
+| `VITE_YOLO_FPS` (host Vite) | `1` | Target per kamera: 1 atau 2; 2 FPS dicoba hanya setelah request selesai dalam 500 ms |
+| `VITE_YOLO_INTERVAL_MS` (legacy) | `1000` | Override interval minimal 500 ms; pilih `VITE_YOLO_FPS` untuk konfigurasi baru |
 
 Snapshot seluruh frame diperkecil proporsional sampai sisi terpanjang 1280 px, JPEG quality 0,85, tanpa crop. Container menerima JPEG/PNG sampai 2 MiB, dimensi snapshot 16–2048 px per sumbu. Ukuran original dan rasio snapshot divalidasi sebelum inference. Ukuran original maksimum 8192 px per sumbu.
 
-Satu request aktif per kartu dan satu slot inference global. Empat kamera dapat menunggu slot secara terbatas, maksimal satu frame per kamera. Request duplikat dari kamera yang masih menunggu/berproses ditolak HTTP 429. Jika batas tunggu habis, browser mengambil frame **baru** pada kesempatan berikutnya dan mempertahankan hasil terakhir selama belum kedaluwarsa. Usia frame dan identitas sesi diperiksa kembali setelah mendapat slot. Pause/seek/loop/remove/error/dispose/disable membatalkan request, menghapus hasil UI, dan menutup sesi. Proses native yang sudah berjalan mungkin selesai di server, tetapi tidak boleh memasukkan hasil ke sesi yang telah ditutup/diganti.
+Satu request aktif per kartu dan satu slot inference global. Frame baru saat request aktif dibuang tanpa capture atau antrean. Backend langsung menolak HTTP 429 saat kamera/model sibuk; `SIGAP_YOLO_SLOT_TIMEOUT_SECONDS` lama tidak lagi digunakan. Frontend mengambil frame terbaru pada kesempatan berikutnya, mempertahankan hasil hanya selama masih segar. Interval mencakup waktu request, tidak ditambahkan lagi setelah processing; jitter maksimal 25 ms mengurangi tabrakan antarkamera. FPS aktual dibatasi kemampuan perangkat, bukan dijamin oleh target UI.
+
+Panel kamera menampilkan **Mendeteksi**, **Frame terbaru**, **Data terlambat**, atau **Inference lambat**, target 1/2 FPS, interval efektif, dan waktu request terakhir. Jika 2 FPS dipilih tetapi request melewati budget 500 ms, target kembali ke interval 1 detik sampai kapasitas kembali cukup. Hasil antrean tetap berasal dari frame valid terbaru dan masa berlaku backend (default 2 detik), terpisah dari masa tampil box (1,5 detik).
+
+SORT/ByteTrack tidak diaktifkan: snapshot 1–2 FPS dengan latency CPU belum memberi cukup observasi untuk pencocokan kendaraan yang andal. Tidak ada ID tracking, posisi prediksi, OCR, plat nomor, pengenalan wajah, atau penyimpanan tambahan. Box mengikuti observasi frame sampel, sehingga bukan overlay 25/30 FPS. Pause/seek/loop/remove/error/dispose/disable membatalkan request, menghapus hasil UI, dan menutup sesi. Proses native yang sudah berjalan mungkin selesai di server, tetapi tidak boleh memasukkan hasil ke sesi yang telah ditutup/diganti.
 
 ## Kontrak endpoint
 

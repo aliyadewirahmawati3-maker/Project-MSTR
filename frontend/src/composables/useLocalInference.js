@@ -8,7 +8,7 @@ export function useLocalInference() {
   const states = reactive({})
   const status = computed(() => {
     const values = Object.values(states)
-    const priority = ['AI_OFFLINE', 'YOLO_MODEL_UNAVAILABLE', 'MODEL_LOADING', 'INFERENCE_ERROR', 'INVALID_FRAME', 'STALE', 'ZONE_CALIBRATION_REQUIRED', 'DETECTION_READY', 'DETECTING', 'PAUSED']
+    const priority = ['AI_OFFLINE', 'YOLO_MODEL_UNAVAILABLE', 'MODEL_LOADING', 'INFERENCE_ERROR', 'INVALID_FRAME', 'STALE', 'INFERENCE_SLOW', 'DATA_LATE', 'ZONE_CALIBRATION_REQUIRED', 'DETECTING', 'DETECTION_READY', 'PAUSED']
     return priority.find(item => values.includes(item)) || 'WAITING_FOR_VIDEO'
   })
   return { clientId: crypto.randomUUID(), sessions, results, states, status,
